@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.azure.openai;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -41,6 +43,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.Media;
 import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallbackContext;
@@ -87,8 +90,10 @@ import reactor.core.publisher.Mono;
  * @author Christian Tzolov
  * @author Grogdunn
  * @author Benoit Moussaud
+ * @author Thomas Vitale
  * @author luocongqiu
  * @author timostark
+ * @author Soby Chacko
  * @see ChatModel
  * @see com.azure.ai.openai.OpenAIClient
  */
@@ -96,7 +101,7 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 
 	private static final String DEFAULT_DEPLOYMENT_NAME = "gpt-4o";
 
-	private static final Float DEFAULT_TEMPERATURE = 0.7f;
+	private static final Double DEFAULT_TEMPERATURE = 0.7;
 
 	/**
 	 * The {@link OpenAIClient} used to interact with the Azure OpenAI service.
@@ -148,7 +153,8 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 
 		ChatResponse chatResponse = toChatResponse(chatCompletions);
 
-		if (isToolCall(chatResponse, Set.of(String.valueOf(CompletionsFinishReason.TOOL_CALLS).toLowerCase()))) {
+		if (!isProxyToolCalls(prompt, this.defaultOptions)
+				&& isToolCall(chatResponse, Set.of(String.valueOf(CompletionsFinishReason.TOOL_CALLS).toLowerCase()))) {
 			var toolCallConversation = handleToolCalls(prompt, chatResponse);
 			// Recursively call the call method with the tool call message
 			// conversation that contains the call responses.
@@ -196,7 +202,8 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 
 			ChatResponse chatResponse = toChatResponse(chatCompletions);
 
-			if (isToolCall(chatResponse, Set.of(String.valueOf(CompletionsFinishReason.TOOL_CALLS).toLowerCase()))) {
+			if (!isProxyToolCalls(prompt, this.defaultOptions) && isToolCall(chatResponse,
+					Set.of(String.valueOf(CompletionsFinishReason.TOOL_CALLS).toLowerCase()))) {
 				var toolCallConversation = handleToolCalls(prompt, chatResponse);
 				// Recursively call the call method with the tool call message
 				// conversation that contains the call responses.
@@ -322,8 +329,7 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 					if (!CollectionUtils.isEmpty(userMessage.getMedia())) {
 						items.addAll(userMessage.getMedia()
 							.stream()
-							.map(media -> new ChatMessageImageContentItem(
-									new ChatMessageImageUrl(media.getData().toString())))
+							.map(media -> new ChatMessageImageContentItem(new ChatMessageImageUrl(getMediaUrl(media))))
 							.toList());
 					}
 				}
@@ -350,7 +356,6 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 
 				toolMessage.getResponses().forEach(response -> {
 					Assert.isTrue(response.id() != null, "ToolResponseMessage must have an id");
-					Assert.isTrue(response.name() != null, "ToolResponseMessage must have a name");
 				});
 
 				return toolMessage.getResponses()
@@ -362,6 +367,18 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 			default:
 				throw new IllegalArgumentException("Unknown message type " + message.getMessageType());
 		}
+	}
+
+	private String getMediaUrl(Media media) {
+		Object data = media.getData();
+		if (data instanceof String dataUrl)
+			return dataUrl;
+		else if (data instanceof byte[] dataBytes) {
+			String base64EncodedData = Base64.getEncoder().encodeToString(dataBytes);
+			return "data:" + media.getMimeType() + ";base64," + base64EncodedData;
+		}
+		else
+			throw new IllegalArgumentException("Unknown media data type " + data.getClass().getName());
 	}
 
 	private ChatGenerationMetadata generateChoiceMetadata(ChatChoice choice) {
@@ -409,22 +426,22 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 
 		mergedAzureOptions.setTemperature(fromAzureOptions.getTemperature());
 		if (mergedAzureOptions.getTemperature() == null && toSpringAiOptions.getTemperature() != null) {
-			mergedAzureOptions.setTemperature(toSpringAiOptions.getTemperature().doubleValue());
+			mergedAzureOptions.setTemperature(toSpringAiOptions.getTemperature());
 		}
 
 		mergedAzureOptions.setTopP(fromAzureOptions.getTopP());
 		if (mergedAzureOptions.getTopP() == null && toSpringAiOptions.getTopP() != null) {
-			mergedAzureOptions.setTopP(toSpringAiOptions.getTopP().doubleValue());
+			mergedAzureOptions.setTopP(toSpringAiOptions.getTopP());
 		}
 
 		mergedAzureOptions.setFrequencyPenalty(fromAzureOptions.getFrequencyPenalty());
 		if (mergedAzureOptions.getFrequencyPenalty() == null && toSpringAiOptions.getFrequencyPenalty() != null) {
-			mergedAzureOptions.setFrequencyPenalty(toSpringAiOptions.getFrequencyPenalty().doubleValue());
+			mergedAzureOptions.setFrequencyPenalty(toSpringAiOptions.getFrequencyPenalty());
 		}
 
 		mergedAzureOptions.setPresencePenalty(fromAzureOptions.getPresencePenalty());
 		if (mergedAzureOptions.getPresencePenalty() == null && toSpringAiOptions.getPresencePenalty() != null) {
-			mergedAzureOptions.setPresencePenalty(toSpringAiOptions.getPresencePenalty().doubleValue());
+			mergedAzureOptions.setPresencePenalty(toSpringAiOptions.getPresencePenalty());
 		}
 
 		mergedAzureOptions.setResponseFormat(fromAzureOptions.getResponseFormat());
@@ -439,6 +456,18 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 
 		mergedAzureOptions.setModel(fromAzureOptions.getModel() != null ? fromAzureOptions.getModel()
 				: toSpringAiOptions.getDeploymentName());
+
+		mergedAzureOptions
+			.setSeed(fromAzureOptions.getSeed() != null ? fromAzureOptions.getSeed() : toSpringAiOptions.getSeed());
+
+		mergedAzureOptions.setLogprobs((fromAzureOptions.isLogprobs() != null && fromAzureOptions.isLogprobs())
+				|| (toSpringAiOptions.isLogprobs() != null && toSpringAiOptions.isLogprobs()));
+
+		mergedAzureOptions.setTopLogprobs(fromAzureOptions.getTopLogprobs() != null ? fromAzureOptions.getTopLogprobs()
+				: toSpringAiOptions.getTopLogProbs());
+
+		mergedAzureOptions.setEnhancements(fromAzureOptions.getEnhancements() != null
+				? fromAzureOptions.getEnhancements() : toSpringAiOptions.getEnhancements());
 
 		return mergedAzureOptions;
 	}
@@ -473,19 +502,19 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 		}
 
 		if (fromSpringAiOptions.getTemperature() != null) {
-			mergedAzureOptions.setTemperature(fromSpringAiOptions.getTemperature().doubleValue());
+			mergedAzureOptions.setTemperature(fromSpringAiOptions.getTemperature());
 		}
 
 		if (fromSpringAiOptions.getTopP() != null) {
-			mergedAzureOptions.setTopP(fromSpringAiOptions.getTopP().doubleValue());
+			mergedAzureOptions.setTopP(fromSpringAiOptions.getTopP());
 		}
 
 		if (fromSpringAiOptions.getFrequencyPenalty() != null) {
-			mergedAzureOptions.setFrequencyPenalty(fromSpringAiOptions.getFrequencyPenalty().doubleValue());
+			mergedAzureOptions.setFrequencyPenalty(fromSpringAiOptions.getFrequencyPenalty());
 		}
 
 		if (fromSpringAiOptions.getPresencePenalty() != null) {
-			mergedAzureOptions.setPresencePenalty(fromSpringAiOptions.getPresencePenalty().doubleValue());
+			mergedAzureOptions.setPresencePenalty(fromSpringAiOptions.getPresencePenalty());
 		}
 
 		if (fromSpringAiOptions.getN() != null) {
@@ -502,6 +531,22 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 
 		if (fromSpringAiOptions.getResponseFormat() != null) {
 			mergedAzureOptions.setResponseFormat(toAzureResponseFormat(fromSpringAiOptions.getResponseFormat()));
+		}
+
+		if (fromSpringAiOptions.getSeed() != null) {
+			mergedAzureOptions.setSeed(fromSpringAiOptions.getSeed());
+		}
+
+		if (fromSpringAiOptions.isLogprobs() != null) {
+			mergedAzureOptions.setLogprobs(fromSpringAiOptions.isLogprobs());
+		}
+
+		if (fromSpringAiOptions.getTopLogProbs() != null) {
+			mergedAzureOptions.setTopLogprobs(fromSpringAiOptions.getTopLogProbs());
+		}
+
+		if (fromSpringAiOptions.getEnhancements() != null) {
+			mergedAzureOptions.setEnhancements(fromSpringAiOptions.getEnhancements());
 		}
 
 		return mergedAzureOptions;
@@ -549,6 +594,19 @@ public class AzureOpenAiChatModel extends AbstractToolCallSupport implements Cha
 		}
 		if (fromOptions.getResponseFormat() != null) {
 			copyOptions.setResponseFormat(fromOptions.getResponseFormat());
+		}
+		if (fromOptions.getSeed() != null) {
+			copyOptions.setSeed(fromOptions.getSeed());
+		}
+
+		copyOptions.setLogprobs(fromOptions.isLogprobs());
+
+		if (fromOptions.getTopLogprobs() != null) {
+			copyOptions.setTopLogprobs(fromOptions.getTopLogprobs());
+		}
+
+		if (fromOptions.getEnhancements() != null) {
+			copyOptions.setEnhancements(fromOptions.getEnhancements());
 		}
 
 		return copyOptions;

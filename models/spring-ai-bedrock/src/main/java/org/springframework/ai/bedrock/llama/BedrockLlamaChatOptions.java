@@ -22,8 +22,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.springframework.ai.chat.prompt.ChatOptions;
 
+import java.util.List;
+
 /**
  * @author Christian Tzolov
+ * @author Thomas Vitale
  */
 @JsonInclude(Include.NON_NULL)
 public class BedrockLlamaChatOptions implements ChatOptions {
@@ -32,13 +35,13 @@ public class BedrockLlamaChatOptions implements ChatOptions {
 	 * The temperature value controls the randomness of the generated text. Use a lower
 	 * value to decrease randomness in the response.
 	 */
-	private @JsonProperty("temperature") Float temperature;
+	private @JsonProperty("temperature") Double temperature;
 
 	/**
 	 * The topP value controls the diversity of the generated text. Use a lower value to
 	 * ignore less probable options. Set to 0 or 1.0 to disable.
 	 */
-	private @JsonProperty("top_p") Float topP;
+	private @JsonProperty("top_p") Double topP;
 
 	/**
 	 * The maximum length of the generated text.
@@ -53,12 +56,12 @@ public class BedrockLlamaChatOptions implements ChatOptions {
 
 		private BedrockLlamaChatOptions options = new BedrockLlamaChatOptions();
 
-		public Builder withTemperature(Float temperature) {
+		public Builder withTemperature(Double temperature) {
 			this.options.setTemperature(temperature);
 			return this;
 		}
 
-		public Builder withTopP(Float topP) {
+		public Builder withTopP(Double topP) {
 			this.options.setTopP(topP);
 			return this;
 		}
@@ -74,20 +77,33 @@ public class BedrockLlamaChatOptions implements ChatOptions {
 
 	}
 
-	public Float getTemperature() {
+	@Override
+	public Double getTemperature() {
 		return this.temperature;
 	}
 
-	public void setTemperature(Float temperature) {
+	public void setTemperature(Double temperature) {
 		this.temperature = temperature;
 	}
 
-	public Float getTopP() {
+	@Override
+	public Double getTopP() {
 		return this.topP;
 	}
 
-	public void setTopP(Float topP) {
+	public void setTopP(Double topP) {
 		this.topP = topP;
+	}
+
+	@Override
+	@JsonIgnore
+	public Integer getMaxTokens() {
+		return getMaxGenLen();
+	}
+
+	@JsonIgnore
+	public void setMaxTokens(Integer maxTokens) {
+		setMaxGenLen(maxTokens);
 	}
 
 	public Integer getMaxGenLen() {
@@ -100,13 +116,32 @@ public class BedrockLlamaChatOptions implements ChatOptions {
 
 	@Override
 	@JsonIgnore
-	public Integer getTopK() {
-		throw new UnsupportedOperationException("Unsupported option: 'TopK'");
+	public String getModel() {
+		return null;
 	}
 
+	@Override
 	@JsonIgnore
-	public void setTopK(Integer topK) {
-		throw new UnsupportedOperationException("Unsupported option: 'TopK'");
+	public Double getFrequencyPenalty() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public Double getPresencePenalty() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public List<String> getStopSequences() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public Integer getTopK() {
+		return null;
 	}
 
 	@Override

@@ -32,6 +32,7 @@ import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -92,6 +93,7 @@ public class OpenAiApi {
 	 * @param baseUrl api base URL.
 	 * @param apiKey OpenAI apiKey.
 	 * @param restClientBuilder RestClient builder.
+	 * @param webClientBuilder WebClient builder.
 	 */
 	public OpenAiApi(String baseUrl, String apiKey, RestClient.Builder restClientBuilder,
 			WebClient.Builder webClientBuilder) {
@@ -103,6 +105,7 @@ public class OpenAiApi {
 	 * @param baseUrl api base URL.
 	 * @param apiKey OpenAI apiKey.
 	 * @param restClientBuilder RestClient builder.
+	 * @param webClientBuilder WebClient builder.
 	 * @param responseErrorHandler Response error handler.
 	 */
 	public OpenAiApi(String baseUrl, String apiKey, RestClient.Builder restClientBuilder,
@@ -115,7 +118,10 @@ public class OpenAiApi {
 	 * Create a new chat completion api.
 	 * @param baseUrl api base URL.
 	 * @param apiKey OpenAI apiKey.
+	 * @param completionsPath the path to the chat completions endpoint.
+	 * @param embeddingsPath the path to the embeddings endpoint.
 	 * @param restClientBuilder RestClient builder.
+	 * @param webClientBuilder WebClient builder.
 	 * @param responseErrorHandler Response error handler.
 	 */
 	public OpenAiApi(String baseUrl, String apiKey, String completionsPath, String embeddingsPath,
@@ -131,7 +137,10 @@ public class OpenAiApi {
 	 * @param baseUrl api base URL.
 	 * @param apiKey OpenAI apiKey.
 	 * @param headers the http headers to use.
+	 * @param completionsPath the path to the chat completions endpoint.
+	 * @param embeddingsPath the path to the embeddings endpoint.
 	 * @param restClientBuilder RestClient builder.
+	 * @param webClientBuilder WebClient builder.
 	 * @param responseErrorHandler Response error handler.
 	 */
 	public OpenAiApi(String baseUrl, String apiKey, MultiValueMap<String, String> headers, String completionsPath,
@@ -165,14 +174,36 @@ public class OpenAiApi {
 	}
 
 	/**
-	 * OpenAI Chat Completion Models: -
-	 * <a href="https://platform.openai.com/docs/models/gpt-4o">GPT-4o</a> -
-	 * <a href="https://platform.openai.com/docs/models/gpt-4o-mini">GPT-4o mini</a> -
-	 * <a href="https://platform.openai.com/docs/models/gpt-4-and-gpt-4-turbo">GPT-4 and
-	 * GPT-4 Turbo</a> -
-	 * <a href="https://platform.openai.com/docs/models/gpt-3-5-turbo">GPT-3.5 Turbo</a>.
+	 * OpenAI Chat Completion Models:
+	 *
+	 * <ul>
+	 * <li><a href="https://platform.openai.com/docs/models/gpt-4o">GPT-4o</a></li>
+	 * <li><a href="https://platform.openai.com/docs/models/gpt-4o-mini">GPT-4o
+	 * mini</a></li>
+	 * <li><a href="https://platform.openai.com/docs/models/gpt-4-and-gpt-4-turbo">GPT-4
+	 * and GPT-4 Turbo</a></li>
+	 * <li><a href="https://platform.openai.com/docs/models/gpt-3-5-turbo">GPT-3.5
+	 * Turbo</a></li>
+	 * </ul>
 	 */
 	public enum ChatModel implements ChatModelDescription {
+
+		/**
+		 * Points to the most recent snapshot of the o1 model:o1-preview-2024-09-12
+		 */
+		O1_PREVIEW("o1-preview"),
+		/**
+		 * Latest o1 model snapshot
+		 */
+		O1_PREVIEW_2024_09_12("o1-preview-2024-09-12"),
+		/**
+		 * Points to the most recent o1-mini snapshot:o1-mini-2024-09-12
+		 */
+		O1_MINI("o1-mini"),
+		/**
+		 * Latest o1-mini model snapshot
+		 */
+		O1_MINI_2024_09_12("o1-mini-2024-09-12"),
 
 		/**
 		 * Multimodal flagship model that’s cheaper and faster than GPT-4 Turbo. Currently
@@ -198,7 +229,7 @@ public class OpenAiApi {
 		 * GPT-4 Turbo with Vision model. Vision requests can now use JSON mode and
 		 * function calling.
 		 */
-		GPT_4_TURBO_2204_04_09("gpt-4-turbo-2024-04-09"),
+		GPT_4_TURBO_2024_04_09("gpt-4-turbo-2024-04-09"),
 
 		/**
 		 * (New) GPT-4 Turbo - latest GPT-4 model intended to reduce cases of “laziness”
@@ -359,6 +390,8 @@ public class OpenAiApi {
 	 * @param maxTokens The maximum number of tokens to generate in the chat completion.
 	 * The total length of input tokens and generated tokens is limited by the model's
 	 * context length.
+	 * @param maxCompletionTokens An upper bound for the number of tokens that can be
+	 * generated for a completion, including visible output tokens and reasoning tokens.
 	 * @param n How many chat completion choices to generate for each input message. Note
 	 * that you will be charged based on the number of generated tokens across all the
 	 * choices. Keep n as 1 to minimize costs.
@@ -406,20 +439,21 @@ public class OpenAiApi {
 	public record ChatCompletionRequest(// @formatter:off
 			@JsonProperty("messages") List<ChatCompletionMessage> messages,
 			@JsonProperty("model") String model,
-			@JsonProperty("frequency_penalty") Float frequencyPenalty,
+			@JsonProperty("frequency_penalty") Double frequencyPenalty,
 			@JsonProperty("logit_bias") Map<String, Integer> logitBias,
 			@JsonProperty("logprobs") Boolean logprobs,
 			@JsonProperty("top_logprobs") Integer topLogprobs,
 			@JsonProperty("max_tokens") Integer maxTokens,
+			@JsonProperty("max_completion_tokens") Integer maxCompletionTokens,
 			@JsonProperty("n") Integer n,
-			@JsonProperty("presence_penalty") Float presencePenalty,
+			@JsonProperty("presence_penalty") Double presencePenalty,
 			@JsonProperty("response_format") ResponseFormat responseFormat,
 			@JsonProperty("seed") Integer seed,
 			@JsonProperty("stop") List<String> stop,
 			@JsonProperty("stream") Boolean stream,
 			@JsonProperty("stream_options") StreamOptions streamOptions,
-			@JsonProperty("temperature") Float temperature,
-			@JsonProperty("top_p") Float topP,
+			@JsonProperty("temperature") Double temperature,
+			@JsonProperty("top_p") Double topP,
 			@JsonProperty("tools") List<FunctionTool> tools,
 			@JsonProperty("tool_choice") Object toolChoice,
 			@JsonProperty("parallel_tool_calls") Boolean parallelToolCalls,
@@ -432,8 +466,8 @@ public class OpenAiApi {
 		 * @param model ID of the model to use.
 		 * @param temperature What sampling temperature to use, between 0 and 1.
 		 */
-		public ChatCompletionRequest(List<ChatCompletionMessage> messages, String model, Float temperature) {
-			this(messages, model, null, null, null, null, null, null, null,
+		public ChatCompletionRequest(List<ChatCompletionMessage> messages, String model, Double temperature) {
+			this(messages, model, null, null, null, null, null, null, null, null,
 					null, null, null, false, null, temperature, null,
 					null, null, null, null);
 		}
@@ -447,8 +481,8 @@ public class OpenAiApi {
 		 * @param stream If set, partial message deltas will be sent.Tokens will be sent as data-only server-sent events
 		 * as they become available, with the stream terminated by a data: [DONE] message.
 		 */
-		public ChatCompletionRequest(List<ChatCompletionMessage> messages, String model, Float temperature, boolean stream) {
-			this(messages, model, null, null, null, null, null, null, null,
+		public ChatCompletionRequest(List<ChatCompletionMessage> messages, String model, Double temperature, boolean stream) {
+			this(messages, model, null, null, null, null, null, null, null, null,
 					null, null, null, stream, null, temperature, null,
 					null, null, null,  null);
 		}
@@ -464,8 +498,8 @@ public class OpenAiApi {
 		 */
 		public ChatCompletionRequest(List<ChatCompletionMessage> messages, String model,
 				List<FunctionTool> tools, Object toolChoice) {
-			this(messages, model, null, null, null, null, null, null, null,
-					null, null, null, false, null, 0.8f, null,
+			this(messages, model, null, null, null, null, null, null, null, null,
+					null, null, null, false, null, 0.8, null,
 					tools, toolChoice, null, null);
 		}
 
@@ -478,7 +512,7 @@ public class OpenAiApi {
 		 */
 		public ChatCompletionRequest(List<ChatCompletionMessage> messages, Boolean stream) {
 			this(messages, null, null, null, null, null, null, null, null,
-					null, null, null, stream, null, null, null,
+					null, null, null, null, stream, null, null, null,
 					null, null, null, null);
 		}
 
@@ -489,7 +523,7 @@ public class OpenAiApi {
 		 * @return A new {@link ChatCompletionRequest} with the specified stream options.
 		 */
 		public ChatCompletionRequest withStreamOptions(StreamOptions streamOptions) {
-			return new ChatCompletionRequest(messages, model, frequencyPenalty, logitBias, logprobs, topLogprobs, maxTokens, n, presencePenalty,
+			return new ChatCompletionRequest(messages, model, frequencyPenalty, logitBias, logprobs, topLogprobs, maxTokens, maxCompletionTokens, n, presencePenalty,
 					responseFormat, seed, stop, stream, streamOptions, temperature, topP,
 					tools, toolChoice, parallelToolCalls, user);
 		}
@@ -518,10 +552,71 @@ public class OpenAiApi {
 		/**
 		 * An object specifying the format that the model must output.
 		 * @param type Must be one of 'text' or 'json_object'.
+		 * @param jsonSchema JSON schema object that describes the format of the JSON object.
+		 * Only applicable when type is 'json_schema'.
 		 */
 		@JsonInclude(Include.NON_NULL)
 		public record ResponseFormat(
-				@JsonProperty("type") String type) {
+				@JsonProperty("type") Type type,
+				@JsonProperty("json_schema") JsonSchema jsonSchema ) {
+			
+			public enum Type {
+				/**
+				 * Generates a text response. (default)
+				 */
+				@JsonProperty("text")
+				TEXT,
+
+				/**
+				 * Enables JSON mode, which guarantees the message
+				 * the model generates is valid JSON.
+				 */
+				@JsonProperty("json_object")
+				JSON_OBJECT,
+
+				/**
+				 * Enables Structured Outputs which guarantees the model
+				 * will match your supplied JSON schema.
+				 */
+				@JsonProperty("json_schema")
+				JSON_SCHEMA
+			}
+
+			/**
+			 * JSON schema object that describes the format of the JSON object.
+			 * Applicable for the 'json_schema' type only.
+			 * @param name The name of the schema.
+			 * @param schema The JSON schema object that describes the format of the JSON object.
+			 * @param strict If true, the model will only generate outputs that match the schema.
+			 */
+			@JsonInclude(Include.NON_NULL)
+			public record JsonSchema(
+				@JsonProperty("name") String name,
+				@JsonProperty("schema") Map<String, Object> schema,
+				@JsonProperty("strict") Boolean strict) {
+
+				public JsonSchema(String name, String schema) {
+					this(name, ModelOptionsUtils.jsonToMap(schema), true);
+				}
+
+				public JsonSchema(String name, String schema, Boolean strict) {
+					this(StringUtils.hasText(name)? name : "custom_schema", ModelOptionsUtils.jsonToMap(schema), strict);
+				}
+			}
+
+			public ResponseFormat(Type type) {
+				this(type, (JsonSchema) null);
+			}
+
+			public ResponseFormat(Type type, String schema) {
+				this(type, "custom_schema", schema, true);
+			}
+
+			@ConstructorBinding
+			public ResponseFormat(Type type, String name, String schema, Boolean strict) {
+				this(type, StringUtils.hasText(schema)? new JsonSchema(name, schema, strict): null);
+			}
+
 		}
 
 		/**
@@ -560,7 +655,8 @@ public class OpenAiApi {
 			@JsonProperty("role") Role role,
 			@JsonProperty("name") String name,
 			@JsonProperty("tool_call_id") String toolCallId,
-			@JsonProperty("tool_calls") List<ToolCall> toolCalls) {// @formatter:on
+			@JsonProperty("tool_calls") List<ToolCall> toolCalls,
+			@JsonProperty("refusal") String refusal) {// @formatter:on
 
 		/**
 		 * Get message content as String.
@@ -582,7 +678,7 @@ public class OpenAiApi {
 		 * @param role The role of the author of this message.
 		 */
 		public ChatCompletionMessage(Object content, Role role) {
-			this(content, role, null, null, null);
+			this(content, role, null, null, null, null);
 		}
 
 		/**
@@ -663,6 +759,8 @@ public class OpenAiApi {
 		/**
 		 * The relevant tool call.
 		 *
+		 * @param index The index of the tool call in the list of tool calls. Required in
+		 * case of streaming.
 		 * @param id The ID of the tool call. This ID must be referenced when you submit
 		 * the tool outputs in using the Submit tool outputs to run endpoint.
 		 * @param type The type of tool call the output is required for. For now, this is
@@ -671,9 +769,14 @@ public class OpenAiApi {
 		 */
 		@JsonInclude(Include.NON_NULL)
 		public record ToolCall(// @formatter:off
+				@JsonProperty("index") Integer index,
 				@JsonProperty("id") String id,
 				@JsonProperty("type") String type,
 				@JsonProperty("function") ChatCompletionFunction function) {// @formatter:on
+
+			public ToolCall(String id, String type, ChatCompletionFunction function) {
+				this(null, id, type, function);
+			}
 		}
 
 		/**
@@ -836,12 +939,28 @@ public class OpenAiApi {
 	 * @param promptTokens Number of tokens in the prompt.
 	 * @param totalTokens Total number of tokens used in the request (prompt +
 	 * completion).
+	 * @param completionTokenDetails Breakdown of tokens used in a completion
 	 */
 	@JsonInclude(Include.NON_NULL)
 	public record Usage(// @formatter:off
 			@JsonProperty("completion_tokens") Integer completionTokens,
 			@JsonProperty("prompt_tokens") Integer promptTokens,
-			@JsonProperty("total_tokens") Integer totalTokens) {// @formatter:on
+			@JsonProperty("total_tokens") Integer totalTokens,
+			@JsonProperty("completion_tokens_details") CompletionTokenDetails completionTokenDetails) {// @formatter:on
+
+		public Usage(Integer completionTokens, Integer promptTokens, Integer totalTokens) {
+			this(completionTokens, promptTokens, totalTokens, null);
+		}
+
+		/**
+		 * Breakdown of tokens used in a completion
+		 *
+		 * @param reasoningTokens Number of tokens generated by the model for reasoning.
+		 */
+		@JsonInclude(Include.NON_NULL)
+		public record CompletionTokenDetails(// @formatter:off
+				@JsonProperty("reasoning_tokens") Integer reasoningTokens) {// @formatter:on
+		}
 
 	}
 
@@ -859,6 +978,8 @@ public class OpenAiApi {
 	 * the model runs with. Can be used in conjunction with the seed request parameter to
 	 * understand when backend changes have been made that might impact determinism.
 	 * @param object The object type, which is always 'chat.completion.chunk'.
+	 * @param usage Usage statistics for the completion request. Present in the last chunk
+	 * only if the StreamOptions.includeUsage is set to true.
 	 */
 	@JsonInclude(Include.NON_NULL)
 	public record ChatCompletionChunk(// @formatter:off
@@ -909,7 +1030,7 @@ public class OpenAiApi {
 			MultiValueMap<String, String> additionalHttpHeader) {
 
 		Assert.notNull(chatRequest, "The request body can not be null.");
-		Assert.isTrue(!chatRequest.stream(), "Request must set the steam property to false.");
+		Assert.isTrue(!chatRequest.stream(), "Request must set the stream property to false.");
 		Assert.notNull(additionalHttpHeader, "The additional HTTP headers can not be null.");
 
 		return this.restClient.post()
@@ -944,7 +1065,7 @@ public class OpenAiApi {
 			MultiValueMap<String, String> additionalHttpHeader) {
 
 		Assert.notNull(chatRequest, "The request body can not be null.");
-		Assert.isTrue(chatRequest.stream(), "Request must set the steam property to true.");
+		Assert.isTrue(chatRequest.stream(), "Request must set the stream property to true.");
 
 		AtomicBoolean isInsideTool = new AtomicBoolean(false);
 
@@ -1037,7 +1158,7 @@ public class OpenAiApi {
 	@JsonInclude(Include.NON_NULL)
 	public record Embedding(// @formatter:off
 			@JsonProperty("index") Integer index,
-			@JsonProperty("embedding") List<Double> embedding,
+			@JsonProperty("embedding") float[] embedding,
 			@JsonProperty("object") String object) {// @formatter:on
 
 		/**
@@ -1047,7 +1168,7 @@ public class OpenAiApi {
 		 * @param embedding The embedding vector, which is a list of floats. The length of
 		 * vector depends on the model.
 		 */
-		public Embedding(Integer index, List<Double> embedding) {
+		public Embedding(Integer index, float[] embedding) {
 			this(index, embedding, "embedding");
 		}
 	}

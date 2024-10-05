@@ -31,7 +31,9 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.client.support.BasicAuthenticationInterceptor;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -48,6 +50,9 @@ public class ChromaApi {
 
 	// Regular expression pattern that looks for a message inside the ValueError(...).
 	private static Pattern VALUE_ERROR_PATTERN = Pattern.compile("ValueError\\('([^']*)'\\)");
+
+	// Regular expression pattern that looks for a message.
+	private static Pattern MESSAGE_ERROR_PATTERN = Pattern.compile("\"message\":\"(.*?)\"");
 
 	private RestClient restClient;
 
@@ -182,7 +187,7 @@ public class ChromaApi {
 	 * @param documents List of document contents. One for each returned document.
 	 * @param metadata List of document metadata. One for each returned document.
 	 */
-	public record GetEmbeddingResponse(List<String> ids, List<List<Float>> embeddings, List<String> documents,
+	public record GetEmbeddingResponse(List<String> ids, List<float[]> embeddings, List<String> documents,
 			@JsonProperty("metadatas") List<Map<String, String>> metadata) {
 	}
 
@@ -198,7 +203,7 @@ public class ChromaApi {
 	 * "metadatas", "documents", "distances". Ids are always included. Defaults to
 	 * [metadatas, documents, distances].
 	 */
-	public record QueryRequest(@JsonProperty("query_embeddings") List<List<Float>> queryEmbeddings,
+	public record QueryRequest(@JsonProperty("query_embeddings") List<float[]> queryEmbeddings,
 			@JsonProperty("n_results") int nResults, Map<String, Object> where, List<Include> include) {
 
 		public enum Include {
@@ -222,11 +227,11 @@ public class ChromaApi {
 		/**
 		 * Convenience to query for a single embedding instead of a batch of embeddings.
 		 */
-		public QueryRequest(List<Float> queryEmbedding, int nResults) {
+		public QueryRequest(float[] queryEmbedding, int nResults) {
 			this(List.of(queryEmbedding), nResults, Map.of(), Include.all);
 		}
 
-		public QueryRequest(List<Float> queryEmbedding, int nResults, Map<String, Object> where) {
+		public QueryRequest(float[] queryEmbedding, int nResults, Map<String, Object> where) {
 			this(List.of(queryEmbedding), nResults, where, Include.all);
 		}
 	}
@@ -241,15 +246,14 @@ public class ChromaApi {
 	 * @param metadata List of list of document metadata. One for each returned document.
 	 * @param distances List of list of search distances. One for each returned document.
 	 */
-	public record QueryResponse(List<List<String>> ids, List<List<List<Float>>> embeddings,
-			List<List<String>> documents, @JsonProperty("metadatas") List<List<Map<String, Object>>> metadata,
-			List<List<Double>> distances) {
+	public record QueryResponse(List<List<String>> ids, List<List<float[]>> embeddings, List<List<String>> documents,
+			@JsonProperty("metadatas") List<List<Map<String, Object>>> metadata, List<List<Double>> distances) {
 	}
 
 	/**
 	 * Single query embedding response.
 	 */
-	public record Embedding(String id, List<Float> embedding, String document, Map<String, Object> metadata,
+	public record Embedding(String id, float[] embedding, String document, Map<String, Object> metadata,
 			Double distances) {
 	}
 
@@ -317,8 +321,8 @@ public class ChromaApi {
 				.toEntity(Collection.class)
 				.getBody();
 		}
-		catch (HttpServerErrorException e) {
-			String msg = this.getValueErrorMessage(e.getMessage());
+		catch (HttpServerErrorException | HttpClientErrorException e) {
+			String msg = this.getErrorMessage(e);
 			if (String.format("Collection %s does not exist.", collectionName).equals(msg)) {
 				return null;
 			}
@@ -414,12 +418,28 @@ public class ChromaApi {
 		}
 	}
 
-	private String getValueErrorMessage(String logString) {
-		if (!StringUtils.hasText(logString)) {
+	private String getErrorMessage(HttpStatusCodeException e) {
+		var errorMessage = e.getMessage();
+
+		// If the error message is empty or null, return an empty string
+		if (!StringUtils.hasText(errorMessage)) {
 			return "";
 		}
-		Matcher m = VALUE_ERROR_PATTERN.matcher(logString);
-		return (m.find()) ? m.group(1) : "";
+
+		// If the exception is an HttpServerErrorException, use the VALUE_ERROR_PATTERN
+		Matcher valueErrorMatcher = VALUE_ERROR_PATTERN.matcher(errorMessage);
+		if (e instanceof HttpServerErrorException && valueErrorMatcher.find()) {
+			return valueErrorMatcher.group(1);
+		}
+
+		// Otherwise, use the MESSAGE_ERROR_PATTERN for other cases
+		Matcher messageErrorMatcher = MESSAGE_ERROR_PATTERN.matcher(errorMessage);
+		if (messageErrorMatcher.find()) {
+			return messageErrorMatcher.group(1);
+		}
+
+		// If no pattern matches, return an empty string
+		return "";
 	}
 
 }

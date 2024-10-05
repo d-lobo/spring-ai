@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.ai.model.ModelOptionsUtils;
+import org.springframework.ai.observation.conventions.AiProvider;
 import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -55,7 +56,9 @@ public class OllamaApi {
 
 	private static final Log logger = LogFactory.getLog(OllamaApi.class);
 
-	private final static String DEFAULT_BASE_URL = "http://localhost:11434";
+	private static final String DEFAULT_BASE_URL = "http://localhost:11434";
+
+	public static final String PROVIDER_NAME = AiProvider.OLLAMA.value();
 
 	public static final String REQUEST_BODY_NULL_ERROR = "The request body can not be null.";
 
@@ -97,7 +100,7 @@ public class OllamaApi {
 	 * @param baseUrl The base url of the Ollama server.
 	 */
 	public OllamaApi(String baseUrl) {
-		this(baseUrl, RestClient.builder());
+		this(baseUrl, RestClient.builder(), WebClient.builder());
 	}
 
 	/**
@@ -106,7 +109,7 @@ public class OllamaApi {
 	 * @param baseUrl The base url of the Ollama server.
 	 * @param restClientBuilder The {@link RestClient.Builder} to use.
 	 */
-	public OllamaApi(String baseUrl, RestClient.Builder restClientBuilder) {
+	public OllamaApi(String baseUrl, RestClient.Builder restClientBuilder, WebClient.Builder webClientBuilder) {
 
 		this.responseErrorHandler = new OllamaResponseErrorHandler();
 
@@ -117,7 +120,7 @@ public class OllamaApi {
 
 		this.restClient = restClientBuilder.baseUrl(baseUrl).defaultHeaders(defaultHeaders).build();
 
-		this.webClient = WebClient.builder().baseUrl(baseUrl).defaultHeaders(defaultHeaders).build();
+		this.webClient = webClientBuilder.baseUrl(baseUrl).defaultHeaders(defaultHeaders).build();
 	}
 
 	// --------------------------------------------------------------------------
@@ -336,7 +339,7 @@ public class OllamaApi {
 	@Deprecated(since = "1.0.0-M2", forRemoval = true)
 	public Flux<GenerateResponse> generateStreaming(GenerateRequest completionRequest) {
 		Assert.notNull(completionRequest, REQUEST_BODY_NULL_ERROR);
-		Assert.isTrue(completionRequest.stream(), "Request must set the steam property to true.");
+		Assert.isTrue(completionRequest.stream(), "Request must set the stream property to true.");
 
 		return webClient.post()
 			.uri("/api/generate")
@@ -669,7 +672,7 @@ public class OllamaApi {
 	 */
 	public Flux<ChatResponse> streamingChat(ChatRequest chatRequest) {
 		Assert.notNull(chatRequest, REQUEST_BODY_NULL_ERROR);
-		Assert.isTrue(chatRequest.stream(), "Request must set the steam property to true.");
+		Assert.isTrue(chatRequest.stream(), "Request must set the stream property to true.");
 
 		return webClient.post()
 			.uri("/api/chat")
@@ -751,7 +754,7 @@ public class OllamaApi {
 	@Deprecated(since = "1.0.0-M2", forRemoval = true)
 	@JsonInclude(Include.NON_NULL)
 	public record EmbeddingResponse(
-			@JsonProperty("embedding") List<Double> embedding) {
+			@JsonProperty("embedding") List<Float> embedding) {
 	}
 
 
@@ -764,7 +767,7 @@ public class OllamaApi {
 	@JsonInclude(Include.NON_NULL)
 	public record EmbeddingsResponse(
 			@JsonProperty("model") String model,
-			@JsonProperty("embeddings") List<List<Double>> embeddings) {
+			@JsonProperty("embeddings") List<float[]> embeddings) {
 	}
 
 	/**

@@ -29,6 +29,7 @@ import org.springframework.util.Assert;
  * function-calling.
  *
  * @author Christian Tzolov
+ * @author Thomas Vitale
  * @since 0.8.1
  */
 public class FunctionCallingOptionsBuilder {
@@ -61,18 +62,48 @@ public class FunctionCallingOptionsBuilder {
 		return this;
 	}
 
-	public FunctionCallingOptionsBuilder withTemperature(Float temperature) {
-		this.options.setTemperature(temperature);
+	public FunctionCallingOptionsBuilder withModel(String model) {
+		this.options.setModel(model);
 		return this;
 	}
 
-	public FunctionCallingOptionsBuilder withTopP(Float topP) {
-		this.options.setTopP(topP);
+	public FunctionCallingOptionsBuilder withFrequencyPenalty(Double frequencyPenalty) {
+		this.options.setFrequencyPenalty(frequencyPenalty);
+		return this;
+	}
+
+	public FunctionCallingOptionsBuilder withMaxTokens(Integer maxTokens) {
+		this.options.setMaxTokens(maxTokens);
+		return this;
+	}
+
+	public FunctionCallingOptionsBuilder withPresencePenalty(Double presencePenalty) {
+		this.options.setPresencePenalty(presencePenalty);
+		return this;
+	}
+
+	public FunctionCallingOptionsBuilder withStopSequences(List<String> stopSequences) {
+		this.options.setStopSequences(stopSequences);
+		return this;
+	}
+
+	public FunctionCallingOptionsBuilder withTemperature(Double temperature) {
+		this.options.setTemperature(temperature);
 		return this;
 	}
 
 	public FunctionCallingOptionsBuilder withTopK(Integer topK) {
 		this.options.setTopK(topK);
+		return this;
+	}
+
+	public FunctionCallingOptionsBuilder withTopP(Double topP) {
+		this.options.setTopP(topP);
+		return this;
+	}
+
+	public FunctionCallingOptionsBuilder withProxyToolCalls(Boolean proxyToolCalls) {
+		this.options.setProxyToolCalls(proxyToolCalls);
 		return this;
 	}
 
@@ -86,11 +117,27 @@ public class FunctionCallingOptionsBuilder {
 
 		private Set<String> functions = new HashSet<>();
 
-		private Float temperature;
+		private String model;
 
-		private Float topP;
+		private Double frequencyPenalty;
+
+		private Integer maxTokens;
+
+		private Double presencePenalty;
+
+		private List<String> stopSequences;
+
+		private Double temperature;
 
 		private Integer topK;
+
+		private Double topP;
+
+		private Boolean proxyToolCalls = false;
+
+		public static FunctionCallingOptionsBuilder builder() {
+			return new FunctionCallingOptionsBuilder();
+		}
 
 		@Override
 		public List<FunctionCallback> getFunctionCallbacks() {
@@ -113,26 +160,62 @@ public class FunctionCallingOptionsBuilder {
 		}
 
 		@Override
-		public Float getTemperature() {
-			return this.temperature;
+		public String getModel() {
+			return model;
 		}
 
-		public void setTemperature(Float temperature) {
+		public void setModel(String model) {
+			this.model = model;
+		}
+
+		@Override
+		public Double getFrequencyPenalty() {
+			return frequencyPenalty;
+		}
+
+		public void setFrequencyPenalty(Double frequencyPenalty) {
+			this.frequencyPenalty = frequencyPenalty;
+		}
+
+		@Override
+		public Integer getMaxTokens() {
+			return maxTokens;
+		}
+
+		public void setMaxTokens(Integer maxTokens) {
+			this.maxTokens = maxTokens;
+		}
+
+		@Override
+		public Double getPresencePenalty() {
+			return presencePenalty;
+		}
+
+		public void setPresencePenalty(Double presencePenalty) {
+			this.presencePenalty = presencePenalty;
+		}
+
+		@Override
+		public List<String> getStopSequences() {
+			return stopSequences;
+		}
+
+		public void setStopSequences(List<String> stopSequences) {
+			this.stopSequences = stopSequences;
+		}
+
+		@Override
+		public Double getTemperature() {
+			return temperature;
+		}
+
+		public void setTemperature(Double temperature) {
 			this.temperature = temperature;
 		}
 
 		@Override
-		public Float getTopP() {
-			return this.topP;
-		}
-
-		public void setTopP(Float topP) {
-			this.topP = topP;
-		}
-
-		@Override
 		public Integer getTopK() {
-			return this.topK;
+			return topK;
 		}
 
 		public void setTopK(Integer topK) {
@@ -140,12 +223,36 @@ public class FunctionCallingOptionsBuilder {
 		}
 
 		@Override
+		public Double getTopP() {
+			return topP;
+		}
+
+		public void setTopP(Double topP) {
+			this.topP = topP;
+		}
+
+		@Override
+		public Boolean getProxyToolCalls() {
+			return proxyToolCalls;
+		}
+
+		public void setProxyToolCalls(Boolean proxyToolCalls) {
+			this.proxyToolCalls = proxyToolCalls;
+		}
+
+		@Override
 		public ChatOptions copy() {
-			return new FunctionCallingOptionsBuilder().withTemperature(this.temperature)
-				.withTopP(this.topP)
+			return new FunctionCallingOptionsBuilder().withModel(this.model)
+				.withFrequencyPenalty(this.frequencyPenalty)
+				.withMaxTokens(this.maxTokens)
+				.withPresencePenalty(this.presencePenalty)
+				.withStopSequences(this.stopSequences)
+				.withTemperature(this.temperature)
 				.withTopK(this.topK)
+				.withTopP(this.topP)
 				.withFunctions(this.functions)
 				.withFunctionCallbacks(this.functionCallbacks)
+				.withProxyToolCalls(this.proxyToolCalls)
 				.build();
 		}
 

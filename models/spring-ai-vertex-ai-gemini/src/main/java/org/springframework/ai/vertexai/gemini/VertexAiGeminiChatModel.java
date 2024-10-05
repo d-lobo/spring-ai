@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.cloud.vertexai.api.GoogleSearchRetrieval;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
@@ -137,7 +138,7 @@ public class VertexAiGeminiChatModel extends AbstractToolCallSupport implements 
 
 	public VertexAiGeminiChatModel(VertexAI vertexAI) {
 		this(vertexAI,
-				VertexAiGeminiChatOptions.builder().withModel(ChatModel.GEMINI_1_5_PRO).withTemperature(0.8f).build());
+				VertexAiGeminiChatOptions.builder().withModel(ChatModel.GEMINI_1_5_PRO).withTemperature(0.8).build());
 	}
 
 	public VertexAiGeminiChatModel(VertexAI vertexAI, VertexAiGeminiChatOptions options) {
@@ -179,7 +180,8 @@ public class VertexAiGeminiChatModel extends AbstractToolCallSupport implements 
 
 		ChatResponse chatResponse = new ChatResponse(generations, toChatResponseMetadata(response));
 
-		if (isToolCall(chatResponse, Set.of(FinishReason.STOP.name()))) {
+		if (!isProxyToolCalls(prompt, this.defaultOptions)
+				&& isToolCall(chatResponse, Set.of(FinishReason.STOP.name()))) {
 			var toolCallConversation = handleToolCalls(prompt, chatResponse);
 			// Recursively call the call method with the tool call message
 			// conversation that contains the call responses.
@@ -208,7 +210,7 @@ public class VertexAiGeminiChatModel extends AbstractToolCallSupport implements 
 
 				ChatResponse chatResponse = new ChatResponse(generations, toChatResponseMetadata(response));
 
-				if (isToolCall(chatResponse,
+				if (!isProxyToolCalls(prompt, this.defaultOptions) && isToolCall(chatResponse,
 						Set.of(FinishReason.STOP.name(), FinishReason.FINISH_REASON_UNSPECIFIED.name()))) {
 					var toolCallConversation = handleToolCalls(prompt, chatResponse);
 					// Recursively call the stream method with the tool call message
@@ -315,8 +317,19 @@ public class VertexAiGeminiChatModel extends AbstractToolCallSupport implements 
 		}
 
 		// Add the enabled functions definitions to the request's tools parameter.
+		List<Tool> tools = new ArrayList<>();
 		if (!CollectionUtils.isEmpty(functionsForThisRequest)) {
-			List<Tool> tools = this.getFunctionTools(functionsForThisRequest);
+			tools.addAll(this.getFunctionTools(functionsForThisRequest));
+		}
+
+		if (prompt.getOptions() instanceof VertexAiGeminiChatOptions options && options.getGoogleSearchRetrieval()) {
+			final var googleSearchRetrieval = GoogleSearchRetrieval.newBuilder().getDefaultInstanceForType();
+			final var googleSearchRetrievalTool = Tool.newBuilder()
+				.setGoogleSearchRetrieval(googleSearchRetrieval)
+				.build();
+			tools.add(googleSearchRetrievalTool);
+		}
+		if (!CollectionUtils.isEmpty(tools)) {
 			generativeModelBuilder.setTools(tools);
 		}
 
@@ -342,7 +355,7 @@ public class VertexAiGeminiChatModel extends AbstractToolCallSupport implements 
 		GenerationConfig.Builder generationConfigBuilder = GenerationConfig.newBuilder();
 
 		if (options.getTemperature() != null) {
-			generationConfigBuilder.setTemperature(options.getTemperature());
+			generationConfigBuilder.setTemperature(options.getTemperature().floatValue());
 		}
 		if (options.getMaxOutputTokens() != null) {
 			generationConfigBuilder.setMaxOutputTokens(options.getMaxOutputTokens());
@@ -351,13 +364,16 @@ public class VertexAiGeminiChatModel extends AbstractToolCallSupport implements 
 			generationConfigBuilder.setTopK(options.getTopK());
 		}
 		if (options.getTopP() != null) {
-			generationConfigBuilder.setTopP(options.getTopP());
+			generationConfigBuilder.setTopP(options.getTopP().floatValue());
 		}
 		if (options.getCandidateCount() != null) {
 			generationConfigBuilder.setCandidateCount(options.getCandidateCount());
 		}
 		if (options.getStopSequences() != null) {
 			generationConfigBuilder.addAllStopSequences(options.getStopSequences());
+		}
+		if (options.getResponseMimeType() != null) {
+			generationConfigBuilder.setResponseMimeType(options.getResponseMimeType());
 		}
 
 		return generationConfigBuilder.build();
@@ -416,7 +432,7 @@ public class VertexAiGeminiChatModel extends AbstractToolCallSupport implements 
 		else if (message instanceof AssistantMessage assistantMessage) {
 			List<Part> parts = new ArrayList<>();
 			if (StringUtils.hasText(assistantMessage.getContent())) {
-				List.of(Part.newBuilder().setText(assistantMessage.getContent()).build());
+				parts.add(Part.newBuilder().setText(assistantMessage.getContent()).build());
 			}
 			if (!CollectionUtils.isEmpty(assistantMessage.getToolCalls())) {
 				parts.addAll(assistantMessage.getToolCalls()

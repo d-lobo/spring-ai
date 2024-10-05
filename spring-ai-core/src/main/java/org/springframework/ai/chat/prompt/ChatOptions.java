@@ -16,17 +16,38 @@
 package org.springframework.ai.chat.prompt;
 
 import org.springframework.ai.model.ModelOptions;
+import org.springframework.lang.Nullable;
+
+import java.util.List;
 
 /**
  * The ChatOptions represent the common options, portable across different chat models.
  */
 public interface ChatOptions extends ModelOptions {
 
-	Float getTemperature();
+	@Nullable
+	String getModel();
 
-	Float getTopP();
+	@Nullable
+	Double getFrequencyPenalty();
 
+	@Nullable
+	Integer getMaxTokens();
+
+	@Nullable
+	Double getPresencePenalty();
+
+	@Nullable
+	List<String> getStopSequences();
+
+	@Nullable
+	Double getTemperature();
+
+	@Nullable
 	Integer getTopK();
+
+	@Nullable
+	Double getTopP();
 
 	ChatOptions copy();
 

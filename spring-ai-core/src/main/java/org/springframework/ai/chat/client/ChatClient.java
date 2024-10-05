@@ -21,17 +21,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import org.springframework.ai.model.Media;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.observation.ChatClientObservationConvention;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.StructuredOutputConverter;
+import org.springframework.ai.model.Media;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.Resource;
 import org.springframework.util.MimeType;
 
+import io.micrometer.observation.ObservationRegistry;
 import reactor.core.publisher.Flux;
 
 /**
@@ -48,16 +51,32 @@ import reactor.core.publisher.Flux;
 public interface ChatClient {
 
 	static ChatClient create(ChatModel chatModel) {
-		return builder(chatModel).build();
+		return create(chatModel, ObservationRegistry.NOOP);
+	}
+
+	static ChatClient create(ChatModel chatModel, ObservationRegistry observationRegistry) {
+		return create(chatModel, observationRegistry, null);
+	}
+
+	static ChatClient create(ChatModel chatModel, ObservationRegistry observationRegistry,
+			ChatClientObservationConvention observationConvention) {
+		return builder(chatModel, observationRegistry, observationConvention).build();
 	}
 
 	static Builder builder(ChatModel chatModel) {
-		return new DefaultChatClientBuilder(chatModel);
+		return builder(chatModel, ObservationRegistry.NOOP, null);
+	}
+
+	static Builder builder(ChatModel chatModel, ObservationRegistry observationRegistry,
+			ChatClientObservationConvention customObservationConvention) {
+		return new DefaultChatClientBuilder(chatModel, observationRegistry, customObservationConvention);
 	}
 
 	ChatClientRequestSpec prompt();
 
-	ChatClientPromptRequestSpec prompt(Prompt prompt);
+	ChatClientRequestSpec prompt(String content);
+
+	ChatClientRequestSpec prompt(Prompt prompt);
 
 	/**
 	 * Return a {@link ChatClient.Builder} to create a new {@link ChatClient} whose
@@ -106,9 +125,9 @@ public interface ChatClient {
 
 		AdvisorSpec params(Map<String, Object> p);
 
-		AdvisorSpec advisors(RequestResponseAdvisor... advisors);
+		AdvisorSpec advisors(Advisor... advisors);
 
-		AdvisorSpec advisors(List<RequestResponseAdvisor> advisors);
+		AdvisorSpec advisors(List<Advisor> advisors);
 
 	}
 
@@ -140,14 +159,6 @@ public interface ChatClient {
 
 	}
 
-	interface ChatClientPromptRequestSpec {
-
-		CallPromptResponseSpec call();
-
-		StreamPromptResponseSpec stream();
-
-	}
-
 	interface CallPromptResponseSpec {
 
 		String content();
@@ -176,9 +187,9 @@ public interface ChatClient {
 
 		ChatClientRequestSpec advisors(Consumer<AdvisorSpec> consumer);
 
-		ChatClientRequestSpec advisors(RequestResponseAdvisor... advisors);
+		ChatClientRequestSpec advisors(Advisor... advisors);
 
-		ChatClientRequestSpec advisors(List<RequestResponseAdvisor> advisors);
+		ChatClientRequestSpec advisors(List<Advisor> advisors);
 
 		ChatClientRequestSpec messages(Message... messages);
 
@@ -221,11 +232,11 @@ public interface ChatClient {
 	 */
 	interface Builder {
 
-		Builder defaultAdvisors(RequestResponseAdvisor... advisor);
+		Builder defaultAdvisors(Advisor... advisor);
 
 		Builder defaultAdvisors(Consumer<AdvisorSpec> advisorSpecConsumer);
 
-		Builder defaultAdvisors(List<RequestResponseAdvisor> advisors);
+		Builder defaultAdvisors(List<Advisor> advisors);
 
 		Builder defaultOptions(ChatOptions chatOptions);
 

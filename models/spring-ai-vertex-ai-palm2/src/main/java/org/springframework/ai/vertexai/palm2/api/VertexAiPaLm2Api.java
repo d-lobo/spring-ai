@@ -16,6 +16,7 @@
 package org.springframework.ai.vertexai.palm2.api;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -86,6 +87,7 @@ import org.springframework.web.client.RestClient;
  * https://ai.google.dev/api/rest#rest-resource:-v1.models
  *
  * @author Christian Tzolov
+ * @author Thomas Vitale
  */
 public class VertexAiPaLm2Api {
 
@@ -352,8 +354,8 @@ public class VertexAiPaLm2Api {
 			@JsonProperty("inputTokenLimit") Integer inputTokenLimit,
 			@JsonProperty("outputTokenLimit") Integer outputTokenLimit,
 			@JsonProperty("supportedGenerationMethods") List<String> supportedGenerationMethods,
-			@JsonProperty("temperature") Float temperature,
-			@JsonProperty("topP") Float topP,
+			@JsonProperty("temperature") Double temperature,
+			@JsonProperty("topP") Double topP,
 			@JsonProperty("topK") Integer topK) {
 	}
 
@@ -364,8 +366,17 @@ public class VertexAiPaLm2Api {
 	 */
 	@JsonInclude(Include.NON_NULL)
 	public record Embedding(
-			@JsonProperty("value") List<Double> value) {
+			@JsonProperty("value") float[] value) {
 
+		@Override
+		public final int hashCode() {
+			return Arrays.hashCode(value);
+		}
+
+		@Override
+		public final boolean equals(Object arg0) {
+			return Arrays.equals(value,((Embedding) arg0).value);
+		}
 	}
 
 	/**
@@ -518,9 +529,9 @@ public class VertexAiPaLm2Api {
 	@JsonInclude(Include.NON_NULL)
 	public record GenerateMessageRequest(
 			@JsonProperty("prompt") MessagePrompt prompt,
-			@JsonProperty("temperature") Float temperature,
+			@JsonProperty("temperature") Double temperature,
 			@JsonProperty("candidateCount") Integer candidateCount,
-			@JsonProperty("topP") Float topP,
+			@JsonProperty("topP") Double topP,
 			@JsonProperty("topK") Integer topK) {
 
 		/**
@@ -539,7 +550,7 @@ public class VertexAiPaLm2Api {
 		 * @param temperature (optional) Controls the randomness of the output.
 		 * @param topK (optional) The maximum number of tokens to consider when sampling.
 		 */
-		public GenerateMessageRequest(MessagePrompt prompt, Float temperature, Integer topK) {
+		public GenerateMessageRequest(MessagePrompt prompt, Double temperature, Integer topK) {
 			this(prompt, temperature, null, null, topK);
 		}
 	}

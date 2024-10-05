@@ -17,6 +17,7 @@ package org.springframework.ai.bedrock.cohere;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -28,6 +29,7 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 
 /**
  * @author Christian Tzolov
+ * @author Thomas Vitale
  * @since 0.8.0
  */
 @JsonInclude(Include.NON_NULL)
@@ -38,13 +40,13 @@ public class BedrockCohereChatOptions implements ChatOptions {
 	 * (optional) Use a lower value to decrease randomness in the response. Defaults to
 	 * 0.7.
 	 */
-	@JsonProperty("temperature") Float temperature;
+	@JsonProperty("temperature") Double temperature;
 	/**
 	 * (optional) The maximum cumulative probability of tokens to consider when sampling.
 	 * The generative uses combined Top-k and nucleus sampling. Nucleus sampling considers
 	 * the smallest set of tokens whose probability sum is at least topP.
 	 */
-	@JsonProperty("p") Float topP;
+	@JsonProperty("p") Double topP;
 	/**
 	 * (optional) Specify the number of token choices the generative uses to generate the
 	 * next token.
@@ -87,12 +89,12 @@ public class BedrockCohereChatOptions implements ChatOptions {
 
 		private final BedrockCohereChatOptions options = new BedrockCohereChatOptions();
 
-		public Builder withTemperature(Float temperature) {
+		public Builder withTemperature(Double temperature) {
 			this.options.setTemperature(temperature);
 			return this;
 		}
 
-		public Builder withTopP(Float topP) {
+		public Builder withTopP(Double topP) {
 			this.options.setTopP(topP);
 			return this;
 		}
@@ -139,20 +141,20 @@ public class BedrockCohereChatOptions implements ChatOptions {
 	}
 
 	@Override
-	public Float getTemperature() {
+	public Double getTemperature() {
 		return this.temperature;
 	}
 
-	public void setTemperature(Float temperature) {
+	public void setTemperature(Double temperature) {
 		this.temperature = temperature;
 	}
 
 	@Override
-	public Float getTopP() {
+	public Double getTopP() {
 		return this.topP;
 	}
 
-	public void setTopP(Float topP) {
+	public void setTopP(Double topP) {
 		this.topP = topP;
 	}
 
@@ -165,6 +167,7 @@ public class BedrockCohereChatOptions implements ChatOptions {
 		this.topK = topK;
 	}
 
+	@Override
 	public Integer getMaxTokens() {
 		return this.maxTokens;
 	}
@@ -173,6 +176,7 @@ public class BedrockCohereChatOptions implements ChatOptions {
 		this.maxTokens = maxTokens;
 	}
 
+	@Override
 	public List<String> getStopSequences() {
 		return this.stopSequences;
 	}
@@ -211,6 +215,24 @@ public class BedrockCohereChatOptions implements ChatOptions {
 
 	public void setTruncate(Truncate truncate) {
 		this.truncate = truncate;
+	}
+
+	@Override
+	@JsonIgnore
+	public String getModel() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public Double getFrequencyPenalty() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public Double getPresencePenalty() {
+		return null;
 	}
 
 	@Override

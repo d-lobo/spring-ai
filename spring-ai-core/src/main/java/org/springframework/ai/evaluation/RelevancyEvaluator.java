@@ -6,6 +6,7 @@ import org.springframework.ai.model.Content;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.util.StringUtils;
 
 public class RelevancyEvaluator implements Evaluator {
 
@@ -54,12 +55,10 @@ public class RelevancyEvaluator implements Evaluator {
 
 	protected String doGetSupportingData(EvaluationRequest evaluationRequest) {
 		List<Content> data = evaluationRequest.getDataList();
-		String supportingData = data.stream()
-			.filter(node -> node != null && node.getContent() instanceof String)
-			.map(node -> (Content) node)
+		return data.stream()
 			.map(Content::getContent)
+			.filter(StringUtils::hasText)
 			.collect(Collectors.joining(System.lineSeparator()));
-		return supportingData;
 	}
 
 }

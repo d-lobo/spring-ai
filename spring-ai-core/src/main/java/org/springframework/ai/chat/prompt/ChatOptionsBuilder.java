@@ -15,32 +15,80 @@
  */
 package org.springframework.ai.chat.prompt;
 
+import java.util.List;
+
 public class ChatOptionsBuilder {
 
-	private class ChatOptionsImpl implements ChatOptions {
+	private static class DefaultChatOptions implements ChatOptions {
 
-		private Float temperature;
+		private String model;
 
-		private Float topP;
+		private Double frequencyPenalty;
+
+		private Integer maxTokens;
+
+		private Double presencePenalty;
+
+		private List<String> stopSequences;
+
+		private Double temperature;
 
 		private Integer topK;
 
+		private Double topP;
+
 		@Override
-		public Float getTemperature() {
+		public String getModel() {
+			return model;
+		}
+
+		public void setModel(String model) {
+			this.model = model;
+		}
+
+		@Override
+		public Double getFrequencyPenalty() {
+			return frequencyPenalty;
+		}
+
+		public void setFrequencyPenalty(Double frequencyPenalty) {
+			this.frequencyPenalty = frequencyPenalty;
+		}
+
+		@Override
+		public Integer getMaxTokens() {
+			return maxTokens;
+		}
+
+		public void setMaxTokens(Integer maxTokens) {
+			this.maxTokens = maxTokens;
+		}
+
+		@Override
+		public Double getPresencePenalty() {
+			return presencePenalty;
+		}
+
+		public void setPresencePenalty(Double presencePenalty) {
+			this.presencePenalty = presencePenalty;
+		}
+
+		@Override
+		public List<String> getStopSequences() {
+			return stopSequences;
+		}
+
+		public void setStopSequences(List<String> stopSequences) {
+			this.stopSequences = stopSequences;
+		}
+
+		@Override
+		public Double getTemperature() {
 			return temperature;
 		}
 
-		public void setTemperature(Float temperature) {
+		public void setTemperature(Double temperature) {
 			this.temperature = temperature;
-		}
-
-		@Override
-		public Float getTopP() {
-			return topP;
-		}
-
-		public void setTopP(Float topP) {
-			this.topP = topP;
 		}
 
 		@Override
@@ -53,13 +101,30 @@ public class ChatOptionsBuilder {
 		}
 
 		@Override
+		public Double getTopP() {
+			return topP;
+		}
+
+		public void setTopP(Double topP) {
+			this.topP = topP;
+		}
+
+		@Override
 		public ChatOptions copy() {
-			return builder().withTemperature(this.temperature).withTopP(this.topP).withTopK(this.topK).build();
+			return builder().withModel(this.model)
+				.withFrequencyPenalty(this.frequencyPenalty)
+				.withMaxTokens(this.maxTokens)
+				.withPresencePenalty(this.presencePenalty)
+				.withStopSequences(this.stopSequences != null ? List.copyOf(this.stopSequences) : null)
+				.withTemperature(this.temperature)
+				.withTopK(this.topK)
+				.withTopP(this.topP)
+				.build();
 		}
 
 	}
 
-	private final ChatOptionsImpl options = new ChatOptionsImpl();
+	private final DefaultChatOptions options = new DefaultChatOptions();
 
 	private ChatOptionsBuilder() {
 	}
@@ -68,18 +133,43 @@ public class ChatOptionsBuilder {
 		return new ChatOptionsBuilder();
 	}
 
-	public ChatOptionsBuilder withTemperature(Float temperature) {
-		options.setTemperature(temperature);
+	public ChatOptionsBuilder withModel(String model) {
+		options.setModel(model);
 		return this;
 	}
 
-	public ChatOptionsBuilder withTopP(Float topP) {
-		options.setTopP(topP);
+	public ChatOptionsBuilder withFrequencyPenalty(Double frequencyPenalty) {
+		options.setFrequencyPenalty(frequencyPenalty);
+		return this;
+	}
+
+	public ChatOptionsBuilder withMaxTokens(Integer maxTokens) {
+		options.setMaxTokens(maxTokens);
+		return this;
+	}
+
+	public ChatOptionsBuilder withPresencePenalty(Double presencePenalty) {
+		options.setPresencePenalty(presencePenalty);
+		return this;
+	}
+
+	public ChatOptionsBuilder withStopSequences(List<String> stop) {
+		options.setStopSequences(stop);
+		return this;
+	}
+
+	public ChatOptionsBuilder withTemperature(Double temperature) {
+		options.setTemperature(temperature);
 		return this;
 	}
 
 	public ChatOptionsBuilder withTopK(Integer topK) {
 		options.setTopK(topK);
+		return this;
+	}
+
+	public ChatOptionsBuilder withTopP(Double topP) {
+		options.setTopP(topP);
 		return this;
 	}
 

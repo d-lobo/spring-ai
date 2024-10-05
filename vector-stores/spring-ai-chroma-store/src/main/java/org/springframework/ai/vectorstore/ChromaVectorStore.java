@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.vectorstore;
 
 import java.util.ArrayList;
@@ -26,12 +27,22 @@ import org.springframework.ai.chroma.ChromaApi.AddEmbeddingsRequest;
 import org.springframework.ai.chroma.ChromaApi.DeleteEmbeddingsRequest;
 import org.springframework.ai.chroma.ChromaApi.Embedding;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.BatchingStrategy;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingOptionsBuilder;
+import org.springframework.ai.embedding.TokenCountBatchingStrategy;
+import org.springframework.ai.observation.conventions.VectorStoreProvider;
 import org.springframework.ai.vectorstore.filter.FilterExpressionConverter;
+import org.springframework.ai.vectorstore.observation.AbstractObservationVectorStore;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationContext;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationContext.Builder;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationConvention;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+
+import io.micrometer.observation.ObservationRegistry;
 
 /**
  * {@link ChromaVectorStore} is a concrete implementation of the {@link VectorStore}
@@ -40,7 +51,7 @@ import org.springframework.util.StringUtils;
  * embedding calculations. For more information about how it does this, see the official
  * <a href="https://www.trychroma.com/">Chroma website</a>.
  */
-public class ChromaVectorStore implements VectorStore, InitializingBean {
+public class ChromaVectorStore extends AbstractObservationVectorStore implements InitializingBean {
 
 	public static final String DISTANCE_FIELD_NAME = "distance";
 
@@ -62,17 +73,30 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 
 	private final boolean initializeSchema;
 
+	private final BatchingStrategy batchingStrategy;
+
 	public ChromaVectorStore(EmbeddingModel embeddingModel, ChromaApi chromaApi, boolean initializeSchema) {
 		this(embeddingModel, chromaApi, DEFAULT_COLLECTION_NAME, initializeSchema);
 	}
 
 	public ChromaVectorStore(EmbeddingModel embeddingModel, ChromaApi chromaApi, String collectionName,
 			boolean initializeSchema) {
+		this(embeddingModel, chromaApi, collectionName, initializeSchema, ObservationRegistry.NOOP, null,
+				new TokenCountBatchingStrategy());
+	}
+
+	public ChromaVectorStore(EmbeddingModel embeddingModel, ChromaApi chromaApi, String collectionName,
+			boolean initializeSchema, ObservationRegistry observationRegistry,
+			VectorStoreObservationConvention customObservationConvention, BatchingStrategy batchingStrategy) {
+
+		super(observationRegistry, customObservationConvention);
+
 		this.embeddingModel = embeddingModel;
 		this.chromaApi = chromaApi;
 		this.collectionName = collectionName;
 		this.initializeSchema = initializeSchema;
 		this.filterExpressionConverter = new ChromaFilterExpressionConverter();
+		this.batchingStrategy = batchingStrategy;
 	}
 
 	public void setFilterExpressionConverter(FilterExpressionConverter filterExpressionConverter) {
@@ -81,7 +105,7 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 	}
 
 	@Override
-	public void add(List<Document> documents) {
+	public void doAdd(List<Document> documents) {
 		Assert.notNull(documents, "Documents must not be null");
 		if (CollectionUtils.isEmpty(documents)) {
 			return;
@@ -92,12 +116,14 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 		List<String> contents = new ArrayList<>();
 		List<float[]> embeddings = new ArrayList<>();
 
+		this.embeddingModel.embed(documents, EmbeddingOptionsBuilder.builder().build(), this.batchingStrategy);
+
 		for (Document document : documents) {
 			ids.add(document.getId());
 			metadatas.add(document.getMetadata());
 			contents.add(document.getContent());
-			document.setEmbedding(this.embeddingModel.embed(document));
-			embeddings.add(JsonUtils.toFloatArray(document.getEmbedding()));
+			document.setEmbedding(document.getEmbedding());
+			embeddings.add(document.getEmbedding());
 		}
 
 		this.chromaApi.upsertEmbeddings(this.collectionId,
@@ -105,7 +131,7 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 	}
 
 	@Override
-	public Optional<Boolean> delete(List<String> idList) {
+	public Optional<Boolean> doDelete(List<String> idList) {
 		Assert.notNull(idList, "Document id list must not be null");
 		List<String> deletedIds = this.chromaApi.deleteEmbeddings(this.collectionId,
 				new DeleteEmbeddingsRequest(idList));
@@ -113,7 +139,7 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 	}
 
 	@Override
-	public List<Document> similaritySearch(SearchRequest request) {
+	public List<Document> doSimilaritySearch(SearchRequest request) {
 
 		String nativeFilterExpression = (request.getFilterExpression() != null)
 				? this.filterExpressionConverter.convertExpression(request.getFilterExpression()) : "";
@@ -121,10 +147,10 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 		String query = request.getQuery();
 		Assert.notNull(query, "Query string must not be null");
 
-		List<Double> embedding = this.embeddingModel.embed(query);
+		float[] embedding = this.embeddingModel.embed(query);
 		Map<String, Object> where = (StringUtils.hasText(nativeFilterExpression))
 				? JsonUtils.jsonToMap(nativeFilterExpression) : Map.of();
-		var queryRequest = new ChromaApi.QueryRequest(JsonUtils.toFloatList(embedding), request.getTopK(), where);
+		var queryRequest = new ChromaApi.QueryRequest(embedding, request.getTopK(), where);
 		var queryResponse = this.chromaApi.queryCollection(this.collectionId, queryRequest);
 		var embeddings = this.chromaApi.toEmbeddingResponseList(queryResponse);
 
@@ -141,12 +167,20 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 				}
 				metadata.put(DISTANCE_FIELD_NAME, distance);
 				Document document = new Document(id, content, metadata);
-				document.setEmbedding(JsonUtils.toDouble(chromaEmbedding.embedding()));
+				document.setEmbedding(chromaEmbedding.embedding());
 				responseDocuments.add(document);
 			}
 		}
 
 		return responseDocuments;
+	}
+
+	public String getCollectionName() {
+		return this.collectionName;
+	}
+
+	public String getCollectionId() {
+		return this.collectionId;
 	}
 
 	@Override
@@ -160,6 +194,14 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 			collection = this.chromaApi.createCollection(new ChromaApi.CreateCollectionRequest(this.collectionName));
 		}
 		this.collectionId = collection.id();
+	}
+
+	@Override
+	public Builder createObservationContextBuilder(String operationName) {
+		return VectorStoreObservationContext.builder(VectorStoreProvider.CHROMA.value(), operationName)
+			.withDimensions(this.embeddingModel.dimensions())
+			.withCollectionName(this.collectionName + ":" + this.collectionId)
+			.withFieldName(this.initializeSchema ? DISTANCE_FIELD_NAME : null);
 	}
 
 }

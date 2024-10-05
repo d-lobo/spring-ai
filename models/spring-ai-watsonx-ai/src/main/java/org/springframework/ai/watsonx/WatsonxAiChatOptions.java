@@ -34,6 +34,7 @@ import org.springframework.ai.chat.prompt.ChatOptions;
  *
  * @author Pablo Sanchidrian Herrera
  * @author John Jairo Moreno Rojas
+ * @author Thomas Vitale
  * @since 1.0.0
  * @see <a href=
  * "https://dataplatform.cloud.ibm.com/docs/content/wsj/analyze-data/fm-model-parameters.html?context=wx&audience=wdp">watsonx.ai
@@ -47,14 +48,14 @@ public class WatsonxAiChatOptions implements ChatOptions {
      * The temperature of the model. Increasing the temperature will
      * make the model answer more creatively. (Default: 0.7)
      */
-    @JsonProperty("temperature") private Float temperature;
+    @JsonProperty("temperature") private Double temperature;
 
     /**
      * Works together with top-k. A higher value (e.g., 0.95) will lead to
      * more diverse text, while a lower value (e.g., 0.2) will generate more focused and
      * conservative text. (Default: 1.0)
      */
-    @JsonProperty("top_p") private Float topP;
+    @JsonProperty("top_p") private Double topP;
 
     /**
      * Reduces the probability of generating nonsense. A higher value (e.g.
@@ -103,7 +104,7 @@ public class WatsonxAiChatOptions implements ChatOptions {
      * (e.g., 1.8) will penalize repetitions more strongly, while a lower value (e.g.,
      * 1.1) will be more lenient. (Default: 1.0)
      */
-    @JsonProperty("repetition_penalty") private Float repetitionPenalty;
+    @JsonProperty("repetition_penalty") private Double repetitionPenalty;
 
     /**
      * Produce repeatable results, set the same random seed value every time. (Default: randomly generated)
@@ -122,24 +123,27 @@ public class WatsonxAiChatOptions implements ChatOptions {
     private Map<String, Object> additional = new HashMap<>();
 
     @JsonIgnore
-    private ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    public Float getTemperature() {
+	@Override
+    public Double getTemperature() {
         return temperature;
     }
 
-    public void setTemperature(Float temperature) {
+    public void setTemperature(Double temperature) {
         this.temperature = temperature;
     }
 
-    public Float getTopP() {
+	@Override
+    public Double getTopP() {
         return topP;
     }
 
-    public void setTopP(Float topP) {
+    public void setTopP(Double topP) {
         this.topP = topP;
     }
 
+	@Override
     public Integer getTopK() {
         return topK;
     }
@@ -155,6 +159,17 @@ public class WatsonxAiChatOptions implements ChatOptions {
     public void setDecodingMethod(String decodingMethod) {
         this.decodingMethod = decodingMethod;
     }
+
+	@Override
+	@JsonIgnore
+	public Integer getMaxTokens() {
+		return getMaxNewTokens();
+	}
+
+	@JsonIgnore
+	public void setMaxTokens(Integer maxTokens) {
+		setMaxNewTokens(maxTokens);
+	}
 
     public Integer getMaxNewTokens() {
         return maxNewTokens;
@@ -172,7 +187,8 @@ public class WatsonxAiChatOptions implements ChatOptions {
         this.minNewTokens = minNewTokens;
     }
 
-    public List<String> getStopSequences() {
+	@Override
+	public List<String> getStopSequences() {
         return stopSequences;
     }
 
@@ -180,11 +196,22 @@ public class WatsonxAiChatOptions implements ChatOptions {
         this.stopSequences = stopSequences;
     }
 
-    public Float getRepetitionPenalty() {
+	@Override
+	@JsonIgnore
+	public Double getPresencePenalty() {
+    	return getRepetitionPenalty();
+    }
+
+	@JsonIgnore
+	public void setPresencePenalty(Double presencePenalty) {
+		setRepetitionPenalty(presencePenalty);
+	}
+
+	public Double getRepetitionPenalty() {
         return repetitionPenalty;
     }
 
-    public void setRepetitionPenalty(Float repetitionPenalty) {
+    public void setRepetitionPenalty(Double repetitionPenalty) {
         this.repetitionPenalty = repetitionPenalty;
     }
 
@@ -196,6 +223,7 @@ public class WatsonxAiChatOptions implements ChatOptions {
         this.randomSeed = randomSeed;
     }
 
+	@Override
     public String getModel() {
         return model;
     }
@@ -218,6 +246,12 @@ public class WatsonxAiChatOptions implements ChatOptions {
         additional.put(key, value);
     }
 
+	@Override
+	@JsonIgnore
+	public Double getFrequencyPenalty() {
+    	return null;
+    }
+
 	public static Builder builder() {
 		return new Builder();
 	}
@@ -226,12 +260,12 @@ public class WatsonxAiChatOptions implements ChatOptions {
 
         WatsonxAiChatOptions options = new WatsonxAiChatOptions();
 
-        public Builder withTemperature(Float temperature) {
+        public Builder withTemperature(Double temperature) {
             this.options.temperature = temperature;
             return this;
         }
 
-        public Builder withTopP(Float topP) {
+        public Builder withTopP(Double topP) {
             this.options.topP = topP;
             return this;
         }
@@ -261,7 +295,7 @@ public class WatsonxAiChatOptions implements ChatOptions {
             return this;
         }
 
-        public Builder withRepetitionPenalty(Float repetitionPenalty) {
+        public Builder withRepetitionPenalty(Double repetitionPenalty) {
             this.options.repetitionPenalty = repetitionPenalty;
             return this;
         }
@@ -309,7 +343,7 @@ public class WatsonxAiChatOptions implements ChatOptions {
     }
 
     /**
-     * Filter out the non supported fields from the options.
+     * Filter out the non-supported fields from the options.
      * @param options The options to filter.
      * @return The filtered options.
      */

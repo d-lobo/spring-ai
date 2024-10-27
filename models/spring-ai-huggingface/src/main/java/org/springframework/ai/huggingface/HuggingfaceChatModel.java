@@ -31,10 +31,10 @@ import org.springframework.ai.chat.prompt.ChatOptionsBuilder;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.huggingface.api.TextGenerationInferenceApi;
 import org.springframework.ai.huggingface.invoker.ApiClient;
-import org.springframework.ai.huggingface.model.AllOfGenerateResponseDetails;
-import org.springframework.ai.huggingface.model.GenerateParameters;
-import org.springframework.ai.huggingface.model.GenerateRequest;
-import org.springframework.ai.huggingface.model.GenerateResponse;
+import org.springframework.ai.huggingface.model.chat.AllOfGenerateResponseDetails;
+import org.springframework.ai.huggingface.model.chat.GenerateParameters;
+import org.springframework.ai.huggingface.model.chat.GenerateRequest;
+import org.springframework.ai.huggingface.model.chat.GenerateResponse;
 
 /**
  * An implementation of {@link ChatModel} that interfaces with HuggingFace Inference

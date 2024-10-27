@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,30 +15,6 @@
  */
 
 package org.springframework.ai.vectorstore;
-
-import org.apache.hc.core5.http.HttpHost;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.opensearch.client.opensearch.OpenSearchClient;
-import org.opensearch.client.transport.httpclient5.ApacheHttpClient5TransportBuilder;
-import org.opensearch.testcontainers.OpensearchContainer;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.openai.OpenAiEmbeddingModel;
-import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.boot.SpringBootConfiguration;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.context.annotation.Bean;
-import org.springframework.core.io.DefaultResourceLoader;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -51,13 +27,46 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.hc.core5.http.HttpHost;
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.transport.httpclient5.ApacheHttpClient5TransportBuilder;
+import org.opensearch.testcontainers.OpensearchContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
+import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.core.io.DefaultResourceLoader;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 
 /**
+ * The OpenSearchVectorStoreIT class is a test class designed to validate the
+ * functionality of a vector store that integrates with OpenSearch. It contains multiple
+ * parameterized tests to ensure the correctness of storing, searching, and updating
+ * vectorized documents in OpenSearch.
+ *
  * @author Jemin Huh
  * @author Soby Chacko
+ * @author Thomas Vitale
+ * @author inpink
  * @since 1.0.0
  */
 @Testcontainers
@@ -66,7 +75,7 @@ class OpenSearchVectorStoreIT {
 
 	@Container
 	private static final OpensearchContainer<?> opensearchContainer = new OpensearchContainer<>(
-			DockerImageName.parse("opensearchproject/opensearch:2.13.0"));
+			OpenSearchImage.DEFAULT_IMAGE);
 
 	private static final String DEFAULT = "cosinesimil";
 
@@ -99,8 +108,11 @@ class OpenSearchVectorStoreIT {
 	@BeforeEach
 	void cleanDatabase() {
 		getContextRunner().run(context -> {
-			VectorStore vectorStore = context.getBean(VectorStore.class);
+			VectorStore vectorStore = context.getBean("vectorStore", OpenSearchVectorStore.class);
 			vectorStore.delete(List.of("_all"));
+
+			VectorStore anotherVectorStore = context.getBean("anotherVectorStore", OpenSearchVectorStore.class);
+			anotherVectorStore.delete(List.of("_all"));
 		});
 	}
 
@@ -109,13 +121,13 @@ class OpenSearchVectorStoreIT {
 	public void addAndSearchTest(String similarityFunction) {
 
 		getContextRunner().run(context -> {
-			OpenSearchVectorStore vectorStore = context.getBean(OpenSearchVectorStore.class);
+			OpenSearchVectorStore vectorStore = context.getBean("vectorStore", OpenSearchVectorStore.class);
 
 			if (!DEFAULT.equals(similarityFunction)) {
 				vectorStore.withSimilarityFunction(similarityFunction);
 			}
 
-			vectorStore.add(documents);
+			vectorStore.add(this.documents);
 
 			Awaitility.await()
 				.until(() -> vectorStore
@@ -127,14 +139,14 @@ class OpenSearchVectorStoreIT {
 
 			assertThat(results).hasSize(1);
 			Document resultDoc = results.get(0);
-			assertThat(resultDoc.getId()).isEqualTo(documents.get(2).getId());
+			assertThat(resultDoc.getId()).isEqualTo(this.documents.get(2).getId());
 			assertThat(resultDoc.getContent()).contains("The Great Depression (1929–1939) was an economic shock");
 			assertThat(resultDoc.getMetadata()).hasSize(2);
 			assertThat(resultDoc.getMetadata()).containsKey("meta2");
 			assertThat(resultDoc.getMetadata()).containsKey("distance");
 
 			// Remove all documents from the store
-			vectorStore.delete(documents.stream().map(Document::getId).toList());
+			vectorStore.delete(this.documents.stream().map(Document::getId).toList());
 
 			Awaitility.await()
 				.until(() -> vectorStore
@@ -148,7 +160,7 @@ class OpenSearchVectorStoreIT {
 	public void searchWithFilters(String similarityFunction) {
 
 		getContextRunner().run(context -> {
-			OpenSearchVectorStore vectorStore = context.getBean(OpenSearchVectorStore.class);
+			OpenSearchVectorStore vectorStore = context.getBean("vectorStore", OpenSearchVectorStore.class);
 
 			if (!DEFAULT.equals(similarityFunction)) {
 				vectorStore.withSimilarityFunction(similarityFunction);
@@ -234,7 +246,7 @@ class OpenSearchVectorStoreIT {
 			assertThat(results.get(0).getId()).isEqualTo(bgDocument2.getId());
 
 			// Remove all documents from the store
-			vectorStore.delete(documents.stream().map(Document::getId).toList());
+			vectorStore.delete(this.documents.stream().map(Document::getId).toList());
 
 			Awaitility.await()
 				.until(() -> vectorStore.similaritySearch(SearchRequest.query("The World").withTopK(1)), hasSize(0));
@@ -246,7 +258,7 @@ class OpenSearchVectorStoreIT {
 	public void documentUpdateTest(String similarityFunction) {
 
 		getContextRunner().run(context -> {
-			OpenSearchVectorStore vectorStore = context.getBean(OpenSearchVectorStore.class);
+			OpenSearchVectorStore vectorStore = context.getBean("vectorStore", OpenSearchVectorStore.class);
 			if (!DEFAULT.equals(similarityFunction)) {
 				vectorStore.withSimilarityFunction(similarityFunction);
 			}
@@ -302,12 +314,12 @@ class OpenSearchVectorStoreIT {
 	public void searchThresholdTest(String similarityFunction) {
 
 		getContextRunner().run(context -> {
-			OpenSearchVectorStore vectorStore = context.getBean(OpenSearchVectorStore.class);
+			OpenSearchVectorStore vectorStore = context.getBean("vectorStore", OpenSearchVectorStore.class);
 			if (!DEFAULT.equals(similarityFunction)) {
 				vectorStore.withSimilarityFunction(similarityFunction);
 			}
 
-			vectorStore.add(documents);
+			vectorStore.add(this.documents);
 
 			SearchRequest query = SearchRequest.query("Great Depression")
 				.withTopK(50)
@@ -328,13 +340,13 @@ class OpenSearchVectorStoreIT {
 
 			assertThat(results).hasSize(1);
 			Document resultDoc = results.get(0);
-			assertThat(resultDoc.getId()).isEqualTo(documents.get(2).getId());
+			assertThat(resultDoc.getId()).isEqualTo(this.documents.get(2).getId());
 			assertThat(resultDoc.getContent()).contains("The Great Depression (1929–1939) was an economic shock");
 			assertThat(resultDoc.getMetadata()).containsKey("meta2");
 			assertThat(resultDoc.getMetadata()).containsKey("distance");
 
 			// Remove all documents from the store
-			vectorStore.delete(documents.stream().map(Document::getId).toList());
+			vectorStore.delete(this.documents.stream().map(Document::getId).toList());
 
 			Awaitility.await()
 				.until(() -> vectorStore
@@ -343,16 +355,62 @@ class OpenSearchVectorStoreIT {
 		});
 	}
 
+	@Test
+	public void searchDocumentsInTwoIndicesTest() {
+		getContextRunner().run(context -> {
+			// given
+			OpenSearchVectorStore vectorStore1 = context.getBean("vectorStore", OpenSearchVectorStore.class);
+			OpenSearchVectorStore vectorStore2 = context.getBean("anotherVectorStore", OpenSearchVectorStore.class);
+
+			Document docInIndex1 = new Document("1", "Document in index 1", Map.of("meta", "index1"));
+			Document docInIndex2 = new Document("2", "Document in index 2", Map.of("meta", "index2"));
+
+			// when
+			vectorStore1.add(List.of(docInIndex1));
+			vectorStore2.add(List.of(docInIndex2));
+
+			List<Document> resultInIndex1 = vectorStore1
+				.similaritySearch(SearchRequest.query("Document in index 1").withTopK(1).withSimilarityThreshold(0));
+
+			List<Document> resultInIndex2 = vectorStore2
+				.similaritySearch(SearchRequest.query("Document in index 2").withTopK(1).withSimilarityThreshold(0));
+
+			// then
+			assertThat(resultInIndex1).hasSize(1);
+			assertThat(resultInIndex1.get(0).getId()).isEqualTo(docInIndex1.getId());
+
+			assertThat(resultInIndex2).hasSize(1);
+			assertThat(resultInIndex2.get(0).getId()).isEqualTo(docInIndex2.getId());
+		});
+	}
+
 	@SpringBootConfiguration
 	@EnableAutoConfiguration(exclude = { DataSourceAutoConfiguration.class })
 	public static class TestApplication {
 
 		@Bean
+		@Qualifier("vectorStore")
 		public OpenSearchVectorStore vectorStore(EmbeddingModel embeddingModel) {
 			try {
 				return new OpenSearchVectorStore(new OpenSearchClient(ApacheHttpClient5TransportBuilder
 					.builder(HttpHost.create(opensearchContainer.getHttpHostAddress()))
 					.build()), embeddingModel, true);
+			}
+			catch (URISyntaxException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		@Bean
+		@Qualifier("anotherVectorStore")
+		public OpenSearchVectorStore anotherVectorStore(EmbeddingModel embeddingModel) {
+			try {
+				return new OpenSearchVectorStore("another_index",
+						new OpenSearchClient(ApacheHttpClient5TransportBuilder
+							.builder(HttpHost.create(opensearchContainer.getHttpHostAddress()))
+							.build()),
+						embeddingModel, OpenSearchVectorStore.DEFAULT_MAPPING_EMBEDDING_TYPE_KNN_VECTOR_DIMENSION_1536,
+						true);
 			}
 			catch (URISyntaxException e) {
 				throw new RuntimeException(e);

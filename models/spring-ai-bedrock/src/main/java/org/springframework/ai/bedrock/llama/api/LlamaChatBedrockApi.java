@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,7 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.bedrock.llama.api;
+
+import java.time.Duration;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -28,17 +31,17 @@ import org.springframework.ai.bedrock.llama.api.LlamaChatBedrockApi.LlamaChatReq
 import org.springframework.ai.bedrock.llama.api.LlamaChatBedrockApi.LlamaChatResponse;
 import org.springframework.ai.model.ChatModelDescription;
 
-import java.time.Duration;
-
 // @formatter:off
 /**
  * Java client for the Bedrock Llama chat model.
  * https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-meta.html
  *
+ * Model IDs can be found here https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
+ *
  * @author Christian Tzolov
  * @author Thomas Vitale
  * @author Wei Jiang
- * @since 0.8.0
+ * @since 1.0.0
  */
 public class LlamaChatBedrockApi extends
 		AbstractBedrockApi<LlamaChatRequest, LlamaChatResponse, LlamaChatResponse> {
@@ -107,6 +110,95 @@ public class LlamaChatBedrockApi extends
 		super(modelId, credentialsProvider, region, objectMapper, timeout);
 	}
 
+	@Override
+	public LlamaChatResponse chatCompletion(LlamaChatRequest request) {
+		return this.internalInvocation(request, LlamaChatResponse.class);
+	}
+
+	@Override
+	public Flux<LlamaChatResponse> chatCompletionStream(LlamaChatRequest request) {
+		return this.internalInvocationStream(request, LlamaChatResponse.class);
+	}
+
+	/**
+	 * Llama models version.
+	 */
+	public enum LlamaChatModel implements ChatModelDescription {
+
+		/**
+		 * meta.llama2-13b-chat-v1
+		 */
+		LLAMA2_13B_CHAT_V1("meta.llama2-13b-chat-v1"),
+
+		/**
+		 * meta.llama2-70b-chat-v1
+		 */
+		LLAMA2_70B_CHAT_V1("meta.llama2-70b-chat-v1"),
+
+		/**
+		 * meta.llama3-8b-instruct-v1:0
+		 */
+		LLAMA3_8B_INSTRUCT_V1("meta.llama3-8b-instruct-v1:0"),
+
+		/**
+		 * meta.llama3-70b-instruct-v1:0
+		 */
+		LLAMA3_70B_INSTRUCT_V1("meta.llama3-70b-instruct-v1:0"),
+
+		/**
+		 * meta.llama3-1-8b-instruct-v1:0
+		 */
+		LLAMA3_1_8B_INSTRUCT_V1("meta.llama3-1-8b-instruct-v1:0"),
+
+		/**
+		 * meta.llama3-1-70b-instruct-v1:0
+		 */
+		LLAMA3_1_70B_INSTRUCT_V1("meta.llama3-1-70b-instruct-v1:0"),
+
+		/**
+		 * meta.llama3-1-405b-instruct-v1:0
+		 */
+		LLAMA3_1_405B_INSTRUCT_V1("meta.llama3-1-405b-instruct-v1:0"),
+
+		/**
+		 * meta.llama3-2-1b-instruct-v1:0
+		 */
+		LLAMA3_2_1B_INSTRUCT_V1("meta.llama3-2-1b-instruct-v1:0"),
+
+		/**
+		 * meta.llama3-2-3b-instruct-v1:0
+		 */
+		LLAMA3_2_3B_INSTRUCT_V1("meta.llama3-2-3b-instruct-v1:0"),
+
+		/**
+		 * meta.llama3-2-11b-instruct-v1:0
+		 */
+		LLAMA3_2_11B_INSTRUCT_V1("meta.llama3-2-11b-instruct-v1:0"),
+
+		/**
+		 * meta.llama3-2-90b-instruct-v1:0
+		 */
+		LLAMA3_2_90B_INSTRUCT_V1("meta.llama3-2-90b-instruct-v1:0");
+
+		private final String id;
+
+		LlamaChatModel(String value) {
+			this.id = value;
+		}
+
+		/**
+		 * @return The model id.
+		 */
+		public String id() {
+			return this.id;
+		}
+
+		@Override
+		public String getName() {
+			return this.id;
+		}
+	}
+
 	/**
 	 * LlamaChatRequest encapsulates the request parameters for the Meta Llama chat model.
 	 *
@@ -160,10 +252,10 @@ public class LlamaChatBedrockApi extends
 
 				public LlamaChatRequest build() {
 					return new LlamaChatRequest(
-							prompt,
-							temperature,
-							topP,
-							maxGenLen
+							this.prompt,
+							this.temperature,
+							this.topP,
+							this.maxGenLen
 					);
 				}
 			}
@@ -201,60 +293,6 @@ public class LlamaChatBedrockApi extends
 			 */
 			@JsonProperty("length") LENGTH
 		}
-	}
-
-	/**
-	 * Llama models version.
-	 */
-	public enum LlamaChatModel implements ChatModelDescription {
-
-		/**
-		 * meta.llama2-13b-chat-v1
-		 */
-		LLAMA2_13B_CHAT_V1("meta.llama2-13b-chat-v1"),
-
-		/**
-		 * meta.llama2-70b-chat-v1
-		 */
-		LLAMA2_70B_CHAT_V1("meta.llama2-70b-chat-v1"),
-
-		/**
-		 * meta.llama3-8b-instruct-v1:0
-		 */
-		LLAMA3_8B_INSTRUCT_V1("meta.llama3-8b-instruct-v1:0"),
-
-		/**
-		 * meta.llama3-70b-instruct-v1:0
-		 */
-		LLAMA3_70B_INSTRUCT_V1("meta.llama3-70b-instruct-v1:0");
-
-		private final String id;
-
-		/**
-		 * @return The model id.
-		 */
-		public String id() {
-			return id;
-		}
-
-		LlamaChatModel(String value) {
-			this.id = value;
-		}
-
-		@Override
-		public String getName() {
-			return this.id;
-		}
-	}
-
-	@Override
-	public LlamaChatResponse chatCompletion(LlamaChatRequest request) {
-		return this.internalInvocation(request, LlamaChatResponse.class);
-	}
-
-	@Override
-	public Flux<LlamaChatResponse> chatCompletionStream(LlamaChatRequest request) {
-		return this.internalInvocationStream(request, LlamaChatResponse.class);
 	}
 }
 // @formatter:on

@@ -1,11 +1,11 @@
 /*
- * Copyright 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,16 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.image.observation;
 
 import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
 import org.junit.jupiter.api.Test;
+
 import org.springframework.ai.image.ImageOptionsBuilder;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.observation.conventions.AiObservationAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.ai.image.observation.ImageModelObservationDocumentation.HighCardinalityKeyNames;
 
 /**
  * Unit tests for {@link DefaultImageModelObservationConvention}.
@@ -104,7 +107,7 @@ class DefaultImageModelObservationConventionTests {
 	}
 
 	@Test
-	void shouldHaveNoneKeyValuesWhenMissing() {
+	void shouldNotHaveKeyValuesWhenEmptyValues() {
 		ImageModelObservationContext observationContext = ImageModelObservationContext.builder()
 			.imagePrompt(generateImagePrompt())
 			.provider("superprovider")
@@ -113,10 +116,12 @@ class DefaultImageModelObservationConventionTests {
 
 		assertThat(this.observationConvention.getLowCardinalityKeyValues(observationContext))
 			.contains(KeyValue.of(AiObservationAttributes.REQUEST_MODEL.value(), KeyValue.NONE_VALUE));
-		assertThat(this.observationConvention.getHighCardinalityKeyValues(observationContext)).contains(
-				KeyValue.of(AiObservationAttributes.REQUEST_IMAGE_RESPONSE_FORMAT.value(), KeyValue.NONE_VALUE),
-				KeyValue.of(AiObservationAttributes.REQUEST_IMAGE_SIZE.value(), KeyValue.NONE_VALUE),
-				KeyValue.of(AiObservationAttributes.REQUEST_IMAGE_STYLE.value(), KeyValue.NONE_VALUE));
+		assertThat(this.observationConvention.getHighCardinalityKeyValues(observationContext)
+			.stream()
+			.map(KeyValue::getKey)
+			.toList()).doesNotContain(HighCardinalityKeyNames.REQUEST_IMAGE_RESPONSE_FORMAT.asString(),
+					HighCardinalityKeyNames.REQUEST_IMAGE_SIZE.asString(),
+					HighCardinalityKeyNames.REQUEST_IMAGE_STYLE.asString());
 	}
 
 	private ImagePrompt generateImagePrompt() {

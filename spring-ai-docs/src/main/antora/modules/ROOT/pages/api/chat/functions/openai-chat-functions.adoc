@@ -148,7 +148,7 @@ OpenAiChatModel chatModel = ...
 
 UserMessage userMessage = new UserMessage("What's the weather like in San Francisco, Tokyo, and Paris?");
 
-ChatResponse response = chatModel.call(new Prompt(userMessage,
+ChatResponse response = this.chatModel.call(new Prompt(this.userMessage,
 		OpenAiChatOptions.builder().withFunction("CurrentWeather").build())); // Enable the function
 
 logger.info("Response: {}", response);
@@ -184,7 +184,7 @@ var promptOptions = OpenAiChatOptions.builder()
 		new MockWeatherService()))) // function code
 	.build();
 
-ChatResponse response = chatModel.call(new Prompt(userMessage, promptOptions));
+ChatResponse response = this.chatModel.call(new Prompt(this.userMessage, this.promptOptions));
 ----
 
 NOTE: The in-prompt registered functions are enabled by default for the duration of this request.
@@ -219,6 +219,60 @@ The https://github.com/spring-projects/spring-ai/blob/main/spring-ai-spring-boot
 //
 // NOTE: Functions are registered when OpenAiChatModel is created, by you must enable in the Prompt the functions to be used in the request.
 
+
+=== Tool Context Support
+
+Spring AI now supports passing additional contextual information to function callbacks through a tool context. This feature allows you to provide extra data that can be used within the function execution, enhancing the flexibility and power of function calling.
+
+The context information that is passed in as the second argument of a `java.util.BiFunction`.  The `ToolContext` contains as an immutable `Map<String,Object>` allowing you to access key-value pairs.
+
+==== How to Use Tool Context
+
+You can set the tool context when building your chat options and use a BiFunction for your callback:
+
+[source,java]
+----
+BiFunction<MockWeatherService.Request, ToolContext, MockWeatherService.Response> weatherFunction =
+    (request, toolContext) -> {
+        String sessionId = (String) toolContext.getContext().get("sessionId");
+        String userId = (String) toolContext.getContext().get("userId");
+
+        // Use sessionId and userId in your function logic
+        double temperature = 0;
+        if (request.location().contains("Paris")) {
+            temperature = 15;
+        }
+        else if (request.location().contains("Tokyo")) {
+            temperature = 10;
+        }
+        else if (request.location().contains("San Francisco")) {
+            temperature = 30;
+        }
+
+        return new MockWeatherService.Response(temperature, 15, 20, 2, 53, 45, MockWeatherService.Unit.C);
+    };
+
+OpenAiChatOptions options = OpenAiChatOptions.builder()
+    .withModel(OpenAiApi.ChatModel.GPT_4_O.getValue())
+    .withFunctionCallbacks(List.of(FunctionCallbackWrapper.builder(this.weatherFunction)
+        .withName("getCurrentWeather")
+        .withDescription("Get the weather in location")
+        .build()))
+    .withToolContext(Map.of("sessionId", "123", "userId", "user456"))
+    .build();
+----
+
+In this example, the `weatherFunction` is defined as a BiFunction that takes both the request and the tool context as parameters. This allows you to access the context directly within the function logic.
+
+You can then use these options when making a call to the chat model:
+
+[source,java]
+----
+UserMessage userMessage = new UserMessage("What's the weather like in San Francisco, Tokyo, and Paris?");
+ChatResponse response = chatModel.call(new Prompt(List.of(this.userMessage), options));
+----
+
+This approach allows you to pass session-specific or user-specific information to your functions, enabling more contextual and personalized responses.
 
 == Appendices:
 

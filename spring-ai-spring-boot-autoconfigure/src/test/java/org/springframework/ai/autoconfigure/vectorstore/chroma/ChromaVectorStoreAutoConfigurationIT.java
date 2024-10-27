@@ -18,13 +18,13 @@ package org.springframework.ai.autoconfigure.vectorstore.chroma;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.tck.TestObservationRegistry;
+import io.micrometer.observation.tck.TestObservationRegistryAssert;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.chromadb.ChromaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import io.micrometer.observation.tck.TestObservationRegistry;
-import io.micrometer.observation.tck.TestObservationRegistryAssert;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -41,6 +41,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertThrows;
 import static org.springframework.ai.autoconfigure.vectorstore.observation.ObservationTestUtil.assertObservationRegistry;
 
 /**
@@ -60,13 +61,12 @@ public class ChromaVectorStoreAutoConfigurationIT {
 		.withUserConfiguration(Config.class)
 		.withPropertyValues("spring.ai.vectorstore.chroma.client.host=http://" + chroma.getHost(),
 				"spring.ai.vectorstore.chroma.client.port=" + chroma.getMappedPort(8000),
-				"spring.ai.vectorstore.chroma.initializeSchema=true",
 				"spring.ai.vectorstore.chroma.collectionName=TestCollection");
 
 	@Test
 	public void addAndSearchWithFilters() {
 
-		contextRunner.run(context -> {
+		contextRunner.withPropertyValues("spring.ai.vectorstore.chroma.initializeSchema=true").run(context -> {
 
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 			TestObservationRegistry observationRegistry = context.getBean(TestObservationRegistry.class);
@@ -118,11 +118,20 @@ public class ChromaVectorStoreAutoConfigurationIT {
 				.hasObservationWithNameEqualTo(DefaultVectorStoreObservationConvention.DEFAULT_NAME)
 				.that()
 				.hasContextualNameEqualTo("chroma delete")
-				.hasHighCardinalityKeyValue(HighCardinalityKeyNames.DB_VECTOR_QUERY_FILTER.asString(), "none")
 				.hasBeenStarted()
 				.hasBeenStopped();
 			observationRegistry.clear();
 
+		});
+	}
+
+	@Test
+	public void throwExceptionOnMissingCollectionAndDisabledInitializedSchema() {
+
+		contextRunner.withPropertyValues("spring.ai.vectorstore.chroma.initializeSchema=false").run(context -> {
+			assertThrows(
+					"Collection TestCollection doesn't exist and won't be created as the initializeSchema is set to false.",
+					java.lang.RuntimeException.class, () -> context.getBean(VectorStore.class));
 		});
 	}
 
@@ -137,6 +146,11 @@ public class ChromaVectorStoreAutoConfigurationIT {
 		@Bean
 		public EmbeddingModel embeddingModel() {
 			return new TransformersEmbeddingModel();
+		}
+
+		@Bean
+		public ObjectMapper objectMapper() {
+			return new ObjectMapper();
 		}
 
 	}

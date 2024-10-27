@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,18 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.azure.openai;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.azure.ai.openai.OpenAIClientBuilder;
+import com.azure.core.credential.AzureKeyCredential;
+import com.azure.core.credential.KeyCredential;
+import com.azure.core.credential.TokenCredential;
+import com.azure.core.util.ClientOptions;
+import com.azure.core.util.Header;
+import io.micrometer.observation.ObservationRegistry;
+
 import org.springframework.ai.azure.openai.AzureOpenAiAudioTranscriptionModel;
 import org.springframework.ai.azure.openai.AzureOpenAiChatModel;
 import org.springframework.ai.azure.openai.AzureOpenAiEmbeddingModel;
 import org.springframework.ai.azure.openai.AzureOpenAiImageModel;
+import org.springframework.ai.chat.observation.ChatModelObservationConvention;
+import org.springframework.ai.embedding.observation.EmbeddingModelObservationConvention;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallbackContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -35,14 +47,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
-
-import com.azure.ai.openai.OpenAIClient;
-import com.azure.ai.openai.OpenAIClientBuilder;
-import com.azure.core.credential.AzureKeyCredential;
-import com.azure.core.credential.KeyCredential;
-import com.azure.core.credential.TokenCredential;
-import com.azure.core.util.ClientOptions;
-import com.azure.core.util.Header;
 
 /**
  * @author Piotr Olaszewski
@@ -58,8 +62,8 @@ public class AzureOpenAiAutoConfiguration {
 	private final static String APPLICATION_ID = "spring-ai";
 
 	@Bean
-	@ConditionalOnMissingBean({ OpenAIClient.class, TokenCredential.class })
-	public OpenAIClient openAIClient(AzureOpenAiConnectionProperties connectionProperties) {
+	@ConditionalOnMissingBean // ({ OpenAIClient.class, TokenCredential.class })
+	public OpenAIClientBuilder openAIClientBuilder(AzureOpenAiConnectionProperties connectionProperties) {
 		if (StringUtils.hasText(connectionProperties.getApiKey())) {
 
 			Assert.hasText(connectionProperties.getEndpoint(), "Endpoint must not be empty");
@@ -72,8 +76,7 @@ public class AzureOpenAiAutoConfiguration {
 			ClientOptions clientOptions = new ClientOptions().setApplicationId(APPLICATION_ID).setHeaders(headers);
 			return new OpenAIClientBuilder().endpoint(connectionProperties.getEndpoint())
 				.credential(new AzureKeyCredential(connectionProperties.getApiKey()))
-				.clientOptions(clientOptions)
-				.buildClient();
+				.clientOptions(clientOptions);
 		}
 
 		// Connect to OpenAI (e.g. not the Azure OpenAI). The deploymentName property is
@@ -81,8 +84,7 @@ public class AzureOpenAiAutoConfiguration {
 		if (StringUtils.hasText(connectionProperties.getOpenAiApiKey())) {
 			return new OpenAIClientBuilder().endpoint("https://api.openai.com/v1")
 				.credential(new KeyCredential(connectionProperties.getOpenAiApiKey()))
-				.clientOptions(new ClientOptions().setApplicationId(APPLICATION_ID))
-				.buildClient();
+				.clientOptions(new ClientOptions().setApplicationId(APPLICATION_ID));
 		}
 
 		throw new IllegalArgumentException("Either API key or OpenAI API key must not be empty");
@@ -91,7 +93,7 @@ public class AzureOpenAiAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean
 	@ConditionalOnBean(TokenCredential.class)
-	public OpenAIClient openAIClientWithTokenCredential(AzureOpenAiConnectionProperties connectionProperties,
+	public OpenAIClientBuilder openAIClientWithTokenCredential(AzureOpenAiConnectionProperties connectionProperties,
 			TokenCredential tokenCredential) {
 
 		Assert.notNull(tokenCredential, "TokenCredential must not be null");
@@ -99,30 +101,42 @@ public class AzureOpenAiAutoConfiguration {
 
 		return new OpenAIClientBuilder().endpoint(connectionProperties.getEndpoint())
 			.credential(tokenCredential)
-			.clientOptions(new ClientOptions().setApplicationId(APPLICATION_ID))
-			.buildClient();
+			.clientOptions(new ClientOptions().setApplicationId(APPLICATION_ID));
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
 	@ConditionalOnProperty(prefix = AzureOpenAiChatProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true",
 			matchIfMissing = true)
-	public AzureOpenAiChatModel azureOpenAiChatModel(OpenAIClient openAIClient,
+	public AzureOpenAiChatModel azureOpenAiChatModel(OpenAIClientBuilder openAIClientBuilder,
 			AzureOpenAiChatProperties chatProperties, List<FunctionCallback> toolFunctionCallbacks,
-			FunctionCallbackContext functionCallbackContext) {
+			FunctionCallbackContext functionCallbackContext, ObjectProvider<ObservationRegistry> observationRegistry,
+			ObjectProvider<ChatModelObservationConvention> observationConvention) {
 
-		return new AzureOpenAiChatModel(openAIClient, chatProperties.getOptions(), functionCallbackContext,
-				toolFunctionCallbacks);
+		var chatModel = new AzureOpenAiChatModel(openAIClientBuilder, chatProperties.getOptions(),
+				functionCallbackContext, toolFunctionCallbacks,
+				observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP));
+		observationConvention.ifAvailable(chatModel::setObservationConvention);
+
+		return chatModel;
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
 	@ConditionalOnProperty(prefix = AzureOpenAiEmbeddingProperties.CONFIG_PREFIX, name = "enabled",
 			havingValue = "true", matchIfMissing = true)
-	public AzureOpenAiEmbeddingModel azureOpenAiEmbeddingModel(OpenAIClient openAIClient,
-			AzureOpenAiEmbeddingProperties embeddingProperties) {
-		return new AzureOpenAiEmbeddingModel(openAIClient, embeddingProperties.getMetadataMode(),
-				embeddingProperties.getOptions());
+	public AzureOpenAiEmbeddingModel azureOpenAiEmbeddingModel(OpenAIClientBuilder openAIClient,
+			AzureOpenAiEmbeddingProperties embeddingProperties, ObjectProvider<ObservationRegistry> observationRegistry,
+			ObjectProvider<EmbeddingModelObservationConvention> observationConvention) {
+
+		var embeddingModel = new AzureOpenAiEmbeddingModel(openAIClient.buildClient(),
+				embeddingProperties.getMetadataMode(), embeddingProperties.getOptions(),
+				observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP));
+
+		observationConvention.ifAvailable(embeddingModel::setObservationConvention);
+
+		return embeddingModel;
+
 	}
 
 	@Bean
@@ -137,19 +151,19 @@ public class AzureOpenAiAutoConfiguration {
 	@ConditionalOnMissingBean
 	@ConditionalOnProperty(prefix = AzureOpenAiImageOptionsProperties.CONFIG_PREFIX, name = "enabled",
 			havingValue = "true", matchIfMissing = true)
-	public AzureOpenAiImageModel azureOpenAiImageClient(OpenAIClient openAIClient,
+	public AzureOpenAiImageModel azureOpenAiImageClient(OpenAIClientBuilder openAIClientBuilder,
 			AzureOpenAiImageOptionsProperties imageProperties) {
 
-		return new AzureOpenAiImageModel(openAIClient, imageProperties.getOptions());
+		return new AzureOpenAiImageModel(openAIClientBuilder.buildClient(), imageProperties.getOptions());
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
 	@ConditionalOnProperty(prefix = AzureOpenAiAudioTranscriptionProperties.CONFIG_PREFIX, name = "enabled",
 			havingValue = "true", matchIfMissing = true)
-	public AzureOpenAiAudioTranscriptionModel azureOpenAiAudioTranscriptionModel(OpenAIClient openAIClient,
+	public AzureOpenAiAudioTranscriptionModel azureOpenAiAudioTranscriptionModel(OpenAIClientBuilder openAIClient,
 			AzureOpenAiAudioTranscriptionProperties audioProperties) {
-		return new AzureOpenAiAudioTranscriptionModel(openAIClient, audioProperties.getOptions());
+		return new AzureOpenAiAudioTranscriptionModel(openAIClient.buildClient(), audioProperties.getOptions());
 	}
 
 }

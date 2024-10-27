@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,6 @@
 
 package org.springframework.ai.chat.client;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
-
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,18 +25,23 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
+
 import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.model.MessageAggregator;
 import org.springframework.ai.chat.prompt.Prompt;
 
-import reactor.core.publisher.Flux;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
 
 /**
  * @author Christian Tzolov
@@ -60,22 +62,33 @@ public class ChatClientAdvisorTests {
 	@Test
 	public void promptChatMemory() {
 
-		when(chatModel.call(promptCaptor.capture()))
-			.thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("Hello John")))))
-			.thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("Your name is John")))));
+		var builder = ChatResponseMetadata.builder()
+			.withId("124")
+			.withUsage(new MessageAggregator.DefaultUsage(1, 2, 3))
+			.withModel("gpt4o")
+			.withKeyValue("created", 0L)
+			.withKeyValue("system-fingerprint", "john doe");
+		ChatResponseMetadata chatResponseMetadata = builder.build();
+
+		given(this.chatModel.call(this.promptCaptor.capture()))
+			.willReturn(
+					new ChatResponse(List.of(new Generation(new AssistantMessage("Hello John"))), chatResponseMetadata))
+			.willReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("Your name is John"))),
+					chatResponseMetadata));
 
 		ChatMemory chatMemory = new InMemoryChatMemory();
 
-		var chatClient = ChatClient.builder(chatModel)
+		var chatClient = ChatClient.builder(this.chatModel)
 			.defaultSystem("Default system text.")
 			.defaultAdvisors(new PromptChatMemoryAdvisor(chatMemory))
 			.build();
 
-		var content = chatClient.prompt().user("my name is John").call().content();
+		ChatResponse chatResponse = chatClient.prompt().user("my name is John").call().chatResponse();
 
+		String content = chatResponse.getResult().getOutput().getContent();
 		assertThat(content).isEqualTo("Hello John");
 
-		Message systemMessage = promptCaptor.getValue().getInstructions().get(0);
+		Message systemMessage = this.promptCaptor.getValue().getInstructions().get(0);
 		assertThat(systemMessage.getContent()).isEqualToIgnoringWhitespace("""
 				Default system text.
 
@@ -87,14 +100,14 @@ public class ChatClientAdvisorTests {
 				""");
 		assertThat(systemMessage.getMessageType()).isEqualTo(MessageType.SYSTEM);
 
-		Message userMessage = promptCaptor.getValue().getInstructions().get(1);
+		Message userMessage = this.promptCaptor.getValue().getInstructions().get(1);
 		assertThat(userMessage.getContent()).isEqualToIgnoringWhitespace("my name is John");
 
 		content = chatClient.prompt().user("What is my name?").call().content();
 
 		assertThat(content).isEqualTo("Your name is John");
 
-		systemMessage = promptCaptor.getValue().getInstructions().get(0);
+		systemMessage = this.promptCaptor.getValue().getInstructions().get(0);
 		assertThat(systemMessage.getContent()).isEqualToIgnoringWhitespace("""
 				Default system text.
 
@@ -108,20 +121,20 @@ public class ChatClientAdvisorTests {
 				""");
 		assertThat(systemMessage.getMessageType()).isEqualTo(MessageType.SYSTEM);
 
-		userMessage = promptCaptor.getValue().getInstructions().get(1);
+		userMessage = this.promptCaptor.getValue().getInstructions().get(1);
 		assertThat(userMessage.getContent()).isEqualToIgnoringWhitespace("What is my name?");
 	}
 
 	@Test
 	public void streamingPromptChatMemory() {
 
-		when(chatModel.stream(promptCaptor.capture())).thenReturn(Flux.generate(
+		given(this.chatModel.stream(this.promptCaptor.capture())).willReturn(Flux.generate(
 				() -> new ChatResponse(List.of(new Generation(new AssistantMessage("Hello John")))), (state, sink) -> {
 					sink.next(state);
 					sink.complete();
 					return state;
 				}))
-			.thenReturn(Flux.generate(
+			.willReturn(Flux.generate(
 					() -> new ChatResponse(List.of(new Generation(new AssistantMessage("Your name is John")))),
 					(state, sink) -> {
 						sink.next(state);
@@ -131,7 +144,7 @@ public class ChatClientAdvisorTests {
 
 		ChatMemory chatMemory = new InMemoryChatMemory();
 
-		var chatClient = ChatClient.builder(chatModel)
+		var chatClient = ChatClient.builder(this.chatModel)
 			.defaultSystem("Default system text.")
 			.defaultAdvisors(new PromptChatMemoryAdvisor(chatMemory))
 			.build();
@@ -140,7 +153,7 @@ public class ChatClientAdvisorTests {
 
 		assertThat(content).isEqualTo("Hello John");
 
-		Message systemMessage = promptCaptor.getValue().getInstructions().get(0);
+		Message systemMessage = this.promptCaptor.getValue().getInstructions().get(0);
 		assertThat(systemMessage.getContent()).isEqualToIgnoringWhitespace("""
 				Default system text.
 
@@ -152,14 +165,14 @@ public class ChatClientAdvisorTests {
 				""");
 		assertThat(systemMessage.getMessageType()).isEqualTo(MessageType.SYSTEM);
 
-		Message userMessage = promptCaptor.getValue().getInstructions().get(1);
+		Message userMessage = this.promptCaptor.getValue().getInstructions().get(1);
 		assertThat(userMessage.getContent()).isEqualToIgnoringWhitespace("my name is John");
 
 		content = join(chatClient.prompt().user("What is my name?").stream().content());
 
 		assertThat(content).isEqualTo("Your name is John");
 
-		systemMessage = promptCaptor.getValue().getInstructions().get(0);
+		systemMessage = this.promptCaptor.getValue().getInstructions().get(0);
 		assertThat(systemMessage.getContent()).isEqualToIgnoringWhitespace("""
 				Default system text.
 
@@ -173,7 +186,7 @@ public class ChatClientAdvisorTests {
 				""");
 		assertThat(systemMessage.getMessageType()).isEqualTo(MessageType.SYSTEM);
 
-		userMessage = promptCaptor.getValue().getInstructions().get(1);
+		userMessage = this.promptCaptor.getValue().getInstructions().get(1);
 		assertThat(userMessage.getContent()).isEqualToIgnoringWhitespace("What is my name?");
 	}
 

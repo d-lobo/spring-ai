@@ -1,11 +1,11 @@
 /*
- * Copyright 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,11 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.chat.observation;
+
+import java.util.List;
 
 import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
 import org.junit.jupiter.api.Test;
+
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -26,8 +30,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptionsBuilder;
 import org.springframework.ai.chat.prompt.Prompt;
-
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.ai.chat.observation.ChatModelObservationDocumentation.HighCardinalityKeyNames;
@@ -133,32 +135,33 @@ class DefaultChatModelObservationConventionTests {
 	}
 
 	@Test
-	void shouldHaveNoneKeyValuesWhenMissing() {
+	void shouldNotHaveKeyValuesWhenMissing() {
 		ChatModelObservationContext observationContext = ChatModelObservationContext.builder()
 			.prompt(generatePrompt())
 			.provider("superprovider")
 			.requestOptions(ChatOptionsBuilder.builder().build())
 			.build();
-		assertThat(this.observationConvention.getLowCardinalityKeyValues(observationContext)).contains(
-				KeyValue.of(LowCardinalityKeyNames.REQUEST_MODEL.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(LowCardinalityKeyNames.RESPONSE_MODEL.asString(), KeyValue.NONE_VALUE));
-		assertThat(this.observationConvention.getHighCardinalityKeyValues(observationContext)).contains(
-				KeyValue.of(HighCardinalityKeyNames.REQUEST_FREQUENCY_PENALTY.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.REQUEST_MAX_TOKENS.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.REQUEST_PRESENCE_PENALTY.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.REQUEST_STOP_SEQUENCES.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.REQUEST_TEMPERATURE.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.REQUEST_TOP_K.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.REQUEST_TOP_P.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.RESPONSE_FINISH_REASONS.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.RESPONSE_ID.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.USAGE_INPUT_TOKENS.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.USAGE_OUTPUT_TOKENS.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.USAGE_TOTAL_TOKENS.asString(), KeyValue.NONE_VALUE));
+		assertThat(this.observationConvention.getLowCardinalityKeyValues(observationContext))
+			.contains(KeyValue.of(LowCardinalityKeyNames.REQUEST_MODEL.asString(), KeyValue.NONE_VALUE))
+			.contains(KeyValue.of(LowCardinalityKeyNames.RESPONSE_MODEL.asString(), KeyValue.NONE_VALUE));
+		assertThat(this.observationConvention.getHighCardinalityKeyValues(observationContext)
+			.stream()
+			.map(KeyValue::getKey)
+			.toList()).doesNotContain(HighCardinalityKeyNames.REQUEST_FREQUENCY_PENALTY.asString(),
+					HighCardinalityKeyNames.REQUEST_MAX_TOKENS.asString(),
+					HighCardinalityKeyNames.REQUEST_PRESENCE_PENALTY.asString(),
+					HighCardinalityKeyNames.REQUEST_STOP_SEQUENCES.asString(),
+					HighCardinalityKeyNames.REQUEST_TEMPERATURE.asString(),
+					HighCardinalityKeyNames.REQUEST_TOP_K.asString(), HighCardinalityKeyNames.REQUEST_TOP_P.asString(),
+					HighCardinalityKeyNames.RESPONSE_FINISH_REASONS.asString(),
+					HighCardinalityKeyNames.RESPONSE_ID.asString(),
+					HighCardinalityKeyNames.USAGE_INPUT_TOKENS.asString(),
+					HighCardinalityKeyNames.USAGE_OUTPUT_TOKENS.asString(),
+					HighCardinalityKeyNames.USAGE_TOTAL_TOKENS.asString());
 	}
 
 	@Test
-	void shouldHaveNoneKeyValuesWhenEmptyValues() {
+	void shouldNotHaveKeyValuesWhenEmptyValues() {
 		ChatModelObservationContext observationContext = ChatModelObservationContext.builder()
 			.prompt(generatePrompt())
 			.provider("superprovider")
@@ -167,10 +170,12 @@ class DefaultChatModelObservationConventionTests {
 		observationContext.setResponse(new ChatResponse(
 				List.of(new Generation(new AssistantMessage("response"), ChatGenerationMetadata.from("", null))),
 				ChatResponseMetadata.builder().withId("").build()));
-		assertThat(this.observationConvention.getHighCardinalityKeyValues(observationContext)).contains(
-				KeyValue.of(HighCardinalityKeyNames.REQUEST_STOP_SEQUENCES.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.RESPONSE_FINISH_REASONS.asString(), KeyValue.NONE_VALUE),
-				KeyValue.of(HighCardinalityKeyNames.RESPONSE_ID.asString(), KeyValue.NONE_VALUE));
+		assertThat(this.observationConvention.getHighCardinalityKeyValues(observationContext)
+			.stream()
+			.map(KeyValue::getKey)
+			.toList()).doesNotContain(HighCardinalityKeyNames.REQUEST_STOP_SEQUENCES.asString(),
+					HighCardinalityKeyNames.RESPONSE_FINISH_REASONS.asString(),
+					HighCardinalityKeyNames.RESPONSE_ID.asString());
 	}
 
 	private Prompt generatePrompt() {

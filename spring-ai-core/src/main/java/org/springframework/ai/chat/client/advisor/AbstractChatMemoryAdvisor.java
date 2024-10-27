@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,10 @@ package org.springframework.ai.chat.client.advisor;
 import java.util.Map;
 import java.util.function.Function;
 
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
 import org.springframework.ai.chat.client.advisor.api.AdvisedRequest;
 import org.springframework.ai.chat.client.advisor.api.AdvisedResponse;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -26,10 +30,6 @@ import org.springframework.ai.chat.client.advisor.api.CallAroundAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAroundAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAroundAdvisorChain;
 import org.springframework.util.Assert;
-
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /**
  * Abstract class that serves as a base for chat memory advisors.
@@ -56,12 +56,20 @@ public abstract class AbstractChatMemoryAdvisor<T> implements CallAroundAdvisor,
 
 	private final boolean protectFromBlocking;
 
+	private final int order;
+
 	protected AbstractChatMemoryAdvisor(T chatMemory) {
 		this(chatMemory, DEFAULT_CHAT_MEMORY_CONVERSATION_ID, DEFAULT_CHAT_MEMORY_RESPONSE_SIZE, true);
 	}
 
 	protected AbstractChatMemoryAdvisor(T chatMemory, String defaultConversationId, int defaultChatMemoryRetrieveSize,
 			boolean protectFromBlocking) {
+		this(chatMemory, defaultConversationId, defaultChatMemoryRetrieveSize, protectFromBlocking,
+				Advisor.DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER);
+	}
+
+	protected AbstractChatMemoryAdvisor(T chatMemory, String defaultConversationId, int defaultChatMemoryRetrieveSize,
+			boolean protectFromBlocking, int order) {
 
 		Assert.notNull(chatMemory, "The chatMemory must not be null!");
 		Assert.hasText(defaultConversationId, "The conversationId must not be empty!");
@@ -71,6 +79,7 @@ public abstract class AbstractChatMemoryAdvisor<T> implements CallAroundAdvisor,
 		this.defaultConversationId = defaultConversationId;
 		this.defaultChatMemoryRetrieveSize = defaultChatMemoryRetrieveSize;
 		this.protectFromBlocking = protectFromBlocking;
+		this.order = order;
 	}
 
 	@Override
@@ -80,11 +89,11 @@ public abstract class AbstractChatMemoryAdvisor<T> implements CallAroundAdvisor,
 
 	@Override
 	public int getOrder() {
-		// The (Ordered.HIGHEST_PRECEDENCE + 1000) value ensures this order has lower
-		// priority (e.g. precedences) than the internal Spring AI advisors. It leaves
-		// room (1000 slots) for the user to plug in their own advisors with higher
+		// by default the (Ordered.HIGHEST_PRECEDENCE + 1000) value ensures this order has
+		// lower priority (e.g. precedences) than the internal Spring AI advisors. It
+		// leaves room (1000 slots) for the user to plug in their own advisors with higher
 		// priority.
-		return Advisor.DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER;
+		return this.order;
 	}
 
 	protected T getChatMemoryStore() {
@@ -118,5 +127,43 @@ public abstract class AbstractChatMemoryAdvisor<T> implements CallAroundAdvisor,
 			: chain.nextAroundStream(beforeAdvise.apply(advisedRequest));
 	}
 
+	public static abstract class AbstractBuilder<T> {
+
+		protected String conversationId = DEFAULT_CHAT_MEMORY_CONVERSATION_ID;
+
+		protected int chatMemoryRetrieveSize = DEFAULT_CHAT_MEMORY_RESPONSE_SIZE;
+
+		protected boolean protectFromBlocking = true;
+
+		protected int order = Advisor.DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER;
+
+		protected T chatMemory;
+
+		protected AbstractBuilder(T chatMemory) {
+			this.chatMemory = chatMemory;
+		}
+
+		public AbstractBuilder withConversationId(String conversationId) {
+			this.conversationId = conversationId;
+			return this;
+		}
+
+		public AbstractBuilder withChatMemoryRetrieveSize(int chatMemoryRetrieveSize) {
+			this.chatMemoryRetrieveSize = chatMemoryRetrieveSize;
+			return this;
+		}
+
+		public AbstractBuilder withProtectFromBlocking(boolean protectFromBlocking) {
+			this.protectFromBlocking = protectFromBlocking;
+			return this;
+		}
+
+		public AbstractBuilder withOrder(int order) {
+			this.order = order;
+			return this;
+		}
+
+		abstract public <T> AbstractChatMemoryAdvisor<T> build();
+	}
 
 }

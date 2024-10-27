@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,20 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.mistralai;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.mistralai.api.MistralAiApi;
 import org.springframework.ai.mistralai.api.MistralAiApi.ChatCompletionRequest.ResponseFormat;
 import org.springframework.ai.mistralai.api.MistralAiApi.ChatCompletionRequest.ToolChoice;
-import org.springframework.ai.mistralai.api.MistralAiApi;
 import org.springframework.ai.mistralai.api.MistralAiApi.FunctionTool;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallingOptions;
@@ -138,8 +142,221 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 	@JsonIgnore
 	private Boolean proxyToolCalls;
 
+	@NestedConfigurationProperty
+	@JsonIgnore
+	private Map<String, Object> toolContext;
+
 	public static Builder builder() {
 		return new Builder();
+	}
+
+	public static MistralAiChatOptions fromOptions(MistralAiChatOptions fromOptions) {
+		return builder().withModel(fromOptions.getModel())
+			.withMaxTokens(fromOptions.getMaxTokens())
+			.withSafePrompt(fromOptions.getSafePrompt())
+			.withRandomSeed(fromOptions.getRandomSeed())
+			.withTemperature(fromOptions.getTemperature())
+			.withTopP(fromOptions.getTopP())
+			.withResponseFormat(fromOptions.getResponseFormat())
+			.withStop(fromOptions.getStop())
+			.withTools(fromOptions.getTools())
+			.withToolChoice(fromOptions.getToolChoice())
+			.withFunctionCallbacks(fromOptions.getFunctionCallbacks())
+			.withFunctions(fromOptions.getFunctions())
+			.withProxyToolCalls(fromOptions.getProxyToolCalls())
+			.withToolContext(fromOptions.getToolContext())
+			.build();
+	}
+
+	@Override
+	public String getModel() {
+		return this.model;
+	}
+
+	public void setModel(String model) {
+		this.model = model;
+	}
+
+	@Override
+	public Integer getMaxTokens() {
+		return this.maxTokens;
+	}
+
+	public void setMaxTokens(Integer maxTokens) {
+		this.maxTokens = maxTokens;
+	}
+
+	public Boolean getSafePrompt() {
+		return this.safePrompt;
+	}
+
+	public void setSafePrompt(Boolean safePrompt) {
+		this.safePrompt = safePrompt;
+	}
+
+	public Integer getRandomSeed() {
+		return this.randomSeed;
+	}
+
+	public void setRandomSeed(Integer randomSeed) {
+		this.randomSeed = randomSeed;
+	}
+
+	public ResponseFormat getResponseFormat() {
+		return this.responseFormat;
+	}
+
+	public void setResponseFormat(ResponseFormat responseFormat) {
+		this.responseFormat = responseFormat;
+	}
+
+	@Override
+	@JsonIgnore
+	public List<String> getStopSequences() {
+		return getStop();
+	}
+
+	@JsonIgnore
+	public void setStopSequences(List<String> stopSequences) {
+		setStop(stopSequences);
+	}
+
+	public List<String> getStop() {
+		return this.stop;
+	}
+
+	public void setStop(List<String> stop) {
+		this.stop = stop;
+	}
+
+	public List<FunctionTool> getTools() {
+		return this.tools;
+	}
+
+	public void setTools(List<FunctionTool> tools) {
+		this.tools = tools;
+	}
+
+	public ToolChoice getToolChoice() {
+		return this.toolChoice;
+	}
+
+	public void setToolChoice(ToolChoice toolChoice) {
+		this.toolChoice = toolChoice;
+	}
+
+	@Override
+	public Double getTemperature() {
+		return this.temperature;
+	}
+
+	public void setTemperature(Double temperature) {
+		this.temperature = temperature;
+	}
+
+	@Override
+	public Double getTopP() {
+		return this.topP;
+	}
+
+	public void setTopP(Double topP) {
+		this.topP = topP;
+	}
+
+	@Override
+	public List<FunctionCallback> getFunctionCallbacks() {
+		return this.functionCallbacks;
+	}
+
+	@Override
+	public void setFunctionCallbacks(List<FunctionCallback> functionCallbacks) {
+		Assert.notNull(functionCallbacks, "FunctionCallbacks must not be null");
+		this.functionCallbacks = functionCallbacks;
+	}
+
+	@Override
+	public Set<String> getFunctions() {
+		return this.functions;
+	}
+
+	@Override
+	public void setFunctions(Set<String> functions) {
+		Assert.notNull(functions, "Function must not be null");
+		this.functions = functions;
+	}
+
+	@Override
+	@JsonIgnore
+	public Double getFrequencyPenalty() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public Double getPresencePenalty() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public Integer getTopK() {
+		return null;
+	}
+
+	@Override
+	public Boolean getProxyToolCalls() {
+		return this.proxyToolCalls;
+	}
+
+	public void setProxyToolCalls(Boolean proxyToolCalls) {
+		this.proxyToolCalls = proxyToolCalls;
+	}
+
+	@Override
+	public Map<String, Object> getToolContext() {
+		return this.toolContext;
+	}
+
+	@Override
+	public void setToolContext(Map<String, Object> toolContext) {
+		this.toolContext = toolContext;
+	}
+
+	@Override
+	public MistralAiChatOptions copy() {
+		return fromOptions(this);
+	}
+
+	@Override
+	public int hashCode() {
+
+		return Objects.hash(this.model, this.temperature, this.topP, this.maxTokens, this.safePrompt, this.randomSeed,
+				this.responseFormat, this.stop, this.tools, this.toolChoice, this.functionCallbacks, this.functions,
+				this.proxyToolCalls, this.toolContext);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+
+		if (obj == null || getClass() != obj.getClass()) {
+			return false;
+		}
+
+		MistralAiChatOptions other = (MistralAiChatOptions) obj;
+
+		return Objects.equals(this.model, other.model) && Objects.equals(this.temperature, other.temperature)
+				&& Objects.equals(this.topP, other.topP) && Objects.equals(this.maxTokens, other.maxTokens)
+				&& Objects.equals(this.safePrompt, other.safePrompt)
+				&& Objects.equals(this.randomSeed, other.randomSeed)
+				&& Objects.equals(this.responseFormat, other.responseFormat) && Objects.equals(this.stop, other.stop)
+				&& Objects.equals(this.tools, other.tools) && Objects.equals(this.toolChoice, other.toolChoice)
+				&& Objects.equals(this.functionCallbacks, other.functionCallbacks)
+				&& Objects.equals(this.functions, other.functions)
+				&& Objects.equals(this.proxyToolCalls, other.proxyToolCalls)
+				&& Objects.equals(this.toolContext, other.toolContext);
 	}
 
 	public static class Builder {
@@ -223,282 +440,20 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 			return this;
 		}
 
+		public Builder withToolContext(Map<String, Object> toolContext) {
+			if (this.options.toolContext == null) {
+				this.options.toolContext = toolContext;
+			}
+			else {
+				this.options.toolContext.putAll(toolContext);
+			}
+			return this;
+		}
+
 		public MistralAiChatOptions build() {
 			return this.options;
 		}
 
-	}
-
-	@Override
-	public String getModel() {
-		return this.model;
-	}
-
-	public void setModel(String model) {
-		this.model = model;
-	}
-
-	@Override
-	public Integer getMaxTokens() {
-		return this.maxTokens;
-	}
-
-	public void setMaxTokens(Integer maxTokens) {
-		this.maxTokens = maxTokens;
-	}
-
-	public Boolean getSafePrompt() {
-		return this.safePrompt;
-	}
-
-	public void setSafePrompt(Boolean safePrompt) {
-		this.safePrompt = safePrompt;
-	}
-
-	public Integer getRandomSeed() {
-		return this.randomSeed;
-	}
-
-	public void setRandomSeed(Integer randomSeed) {
-		this.randomSeed = randomSeed;
-	}
-
-	public ResponseFormat getResponseFormat() {
-		return this.responseFormat;
-	}
-
-	public void setResponseFormat(ResponseFormat responseFormat) {
-		this.responseFormat = responseFormat;
-	}
-
-	@Override
-	@JsonIgnore
-	public List<String> getStopSequences() {
-		return getStop();
-	}
-
-	@JsonIgnore
-	public void setStopSequences(List<String> stopSequences) {
-		setStop(stopSequences);
-	}
-
-	public List<String> getStop() {
-		return this.stop;
-	}
-
-	public void setStop(List<String> stop) {
-		this.stop = stop;
-	}
-
-	public void setTools(List<FunctionTool> tools) {
-		this.tools = tools;
-	}
-
-	public List<FunctionTool> getTools() {
-		return this.tools;
-	}
-
-	public void setToolChoice(ToolChoice toolChoice) {
-		this.toolChoice = toolChoice;
-	}
-
-	public ToolChoice getToolChoice() {
-		return this.toolChoice;
-	}
-
-	@Override
-	public Double getTemperature() {
-		return this.temperature;
-	}
-
-	public void setTemperature(Double temperature) {
-		this.temperature = temperature;
-	}
-
-	@Override
-	public Double getTopP() {
-		return this.topP;
-	}
-
-	public void setTopP(Double topP) {
-		this.topP = topP;
-	}
-
-	@Override
-	public List<FunctionCallback> getFunctionCallbacks() {
-		return this.functionCallbacks;
-	}
-
-	@Override
-	public void setFunctionCallbacks(List<FunctionCallback> functionCallbacks) {
-		Assert.notNull(functionCallbacks, "FunctionCallbacks must not be null");
-		this.functionCallbacks = functionCallbacks;
-	}
-
-	@Override
-	public Set<String> getFunctions() {
-		return this.functions;
-	}
-
-	@Override
-	public void setFunctions(Set<String> functions) {
-		Assert.notNull(functions, "Function must not be null");
-		this.functions = functions;
-	}
-
-	@Override
-	@JsonIgnore
-	public Double getFrequencyPenalty() {
-		return null;
-	}
-
-	@Override
-	@JsonIgnore
-	public Double getPresencePenalty() {
-		return null;
-	}
-
-	@Override
-	@JsonIgnore
-	public Integer getTopK() {
-		return null;
-	}
-
-	@Override
-	public Boolean getProxyToolCalls() {
-		return this.proxyToolCalls;
-	}
-
-	public void setProxyToolCalls(Boolean proxyToolCalls) {
-		this.proxyToolCalls = proxyToolCalls;
-	}
-
-	@Override
-	public MistralAiChatOptions copy() {
-		return fromOptions(this);
-	}
-
-	public static MistralAiChatOptions fromOptions(MistralAiChatOptions fromOptions) {
-		return builder().withModel(fromOptions.getModel())
-			.withMaxTokens(fromOptions.getMaxTokens())
-			.withSafePrompt(fromOptions.getSafePrompt())
-			.withRandomSeed(fromOptions.getRandomSeed())
-			.withTemperature(fromOptions.getTemperature())
-			.withTopP(fromOptions.getTopP())
-			.withResponseFormat(fromOptions.getResponseFormat())
-			.withStop(fromOptions.getStop())
-			.withTools(fromOptions.getTools())
-			.withToolChoice(fromOptions.getToolChoice())
-			.withFunctionCallbacks(fromOptions.getFunctionCallbacks())
-			.withFunctions(fromOptions.getFunctions())
-			.withProxyToolCalls(fromOptions.getProxyToolCalls())
-			.build();
-	}
-
-	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((model == null) ? 0 : model.hashCode());
-		result = prime * result + ((temperature == null) ? 0 : temperature.hashCode());
-		result = prime * result + ((topP == null) ? 0 : topP.hashCode());
-		result = prime * result + ((maxTokens == null) ? 0 : maxTokens.hashCode());
-		result = prime * result + ((safePrompt == null) ? 0 : safePrompt.hashCode());
-		result = prime * result + ((randomSeed == null) ? 0 : randomSeed.hashCode());
-		result = prime * result + ((responseFormat == null) ? 0 : responseFormat.hashCode());
-		result = prime * result + ((stop == null) ? 0 : stop.hashCode());
-		result = prime * result + ((tools == null) ? 0 : tools.hashCode());
-		result = prime * result + ((toolChoice == null) ? 0 : toolChoice.hashCode());
-		result = prime * result + ((functionCallbacks == null) ? 0 : functionCallbacks.hashCode());
-		result = prime * result + ((functions == null) ? 0 : functions.hashCode());
-		result = prime * result + ((proxyToolCalls == null) ? 0 : proxyToolCalls.hashCode());
-		return result;
-	}
-
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		MistralAiChatOptions other = (MistralAiChatOptions) obj;
-		if (model == null) {
-			if (other.model != null)
-				return false;
-		}
-		else if (!model.equals(other.model))
-			return false;
-		if (temperature == null) {
-			if (other.temperature != null)
-				return false;
-		}
-		else if (!temperature.equals(other.temperature))
-			return false;
-		if (topP == null) {
-			if (other.topP != null)
-				return false;
-		}
-		else if (!topP.equals(other.topP))
-			return false;
-		if (maxTokens == null) {
-			if (other.maxTokens != null)
-				return false;
-		}
-		else if (!maxTokens.equals(other.maxTokens))
-			return false;
-		if (safePrompt == null) {
-			if (other.safePrompt != null)
-				return false;
-		}
-		else if (!safePrompt.equals(other.safePrompt))
-			return false;
-		if (randomSeed == null) {
-			if (other.randomSeed != null)
-				return false;
-		}
-		else if (!randomSeed.equals(other.randomSeed))
-			return false;
-		if (responseFormat == null) {
-			if (other.responseFormat != null)
-				return false;
-		}
-		else if (!responseFormat.equals(other.responseFormat))
-			return false;
-		if (stop == null) {
-			if (other.stop != null)
-				return false;
-		}
-		else if (!stop.equals(other.stop))
-			return false;
-		if (tools == null) {
-			if (other.tools != null)
-				return false;
-		}
-		else if (!tools.equals(other.tools))
-			return false;
-		if (toolChoice != other.toolChoice)
-			return false;
-		if (functionCallbacks == null) {
-			if (other.functionCallbacks != null)
-				return false;
-		}
-		else if (!functionCallbacks.equals(other.functionCallbacks))
-			return false;
-		if (functions == null) {
-			if (other.functions != null)
-				return false;
-		}
-		else if (!functions.equals(other.functions))
-			return false;
-		if (proxyToolCalls == null) {
-			if (other.proxyToolCalls != null)
-				return false;
-		}
-		else if (!proxyToolCalls.equals(other.proxyToolCalls))
-			return false;
-		return true;
 	}
 
 }

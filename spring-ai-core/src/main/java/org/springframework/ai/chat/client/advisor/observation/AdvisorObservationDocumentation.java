@@ -1,18 +1,19 @@
 /*
-* Copyright 2024 - 2024 the original author or authors.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-* https://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright 2023-2024 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.springframework.ai.chat.client.advisor.observation;
 
 import io.micrometer.common.docs.KeyName;
@@ -27,7 +28,7 @@ import io.micrometer.observation.docs.ObservationDocumentation;
 public enum AdvisorObservationDocumentation implements ObservationDocumentation {
 
 	/**
-	 * AI Chat Client observations
+	 * AI Advisor observations
 	 */
 	AI_ADVISOR {
 		@Override
@@ -65,7 +66,7 @@ public enum AdvisorObservationDocumentation implements ObservationDocumentation 
 		ADVISOR_TYPE {
 			@Override
 			public String asString() {
-				return "spring.ai.chat.client.advisor.type";
+				return "spring.ai.advisor.type";
 			}
 		}
 
@@ -74,12 +75,12 @@ public enum AdvisorObservationDocumentation implements ObservationDocumentation 
 	public enum HighCardinalityKeyNames implements KeyName {
 
 		/**
-		 * Chat Model name.
+		 * Advisor name.
 		 */
 		ADVISOR_NAME {
 			@Override
 			public String asString() {
-				return "spring.ai.chat.client.advisor.name";
+				return "spring.ai.advisor.name";
 			}
 		},
 		/**
@@ -88,7 +89,7 @@ public enum AdvisorObservationDocumentation implements ObservationDocumentation 
 		ADVISOR_ORDER {
 			@Override
 			public String asString() {
-				return "spring.ai.chat.client.advisor.order";
+				return "spring.ai.advisor.order";
 			}
 		}
 

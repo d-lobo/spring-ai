@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,11 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.vectorstore;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.mongodb.client.MongoClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mongodb.MongoDBAtlasLocalContainer;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -34,27 +45,19 @@ import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 import org.springframework.util.MimeType;
 
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Chris Smith
  * @author Soby Chacko
+ * @author Eddú Meléndez
+ * @author Thomas Vitale
  */
 @Testcontainers
 class MongoDBAtlasVectorStoreIT {
 
 	@Container
-	private static MongoDBAtlasContainer container = new MongoDBAtlasContainer();
+	private static MongoDBAtlasLocalContainer container = new MongoDBAtlasLocalContainer(MongoDbImage.DEFAULT_IMAGE);
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 		.withUserConfiguration(TestApplication.class)
@@ -63,7 +66,7 @@ class MongoDBAtlasVectorStoreIT {
 
 	@BeforeEach
 	public void beforeEach() {
-		contextRunner.run(context -> {
+		this.contextRunner.run(context -> {
 			MongoTemplate mongoTemplate = context.getBean(MongoTemplate.class);
 			mongoTemplate.getCollection("vector_store").deleteMany(new org.bson.Document());
 		});
@@ -71,7 +74,7 @@ class MongoDBAtlasVectorStoreIT {
 
 	@Test
 	void vectorStoreTest() {
-		contextRunner.run(context -> {
+		this.contextRunner.run(context -> {
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 
 			List<Document> documents = List.of(
@@ -106,7 +109,7 @@ class MongoDBAtlasVectorStoreIT {
 
 	@Test
 	void documentUpdateTest() {
-		contextRunner.run(context -> {
+		this.contextRunner.run(context -> {
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 
 			Document document = new Document(UUID.randomUUID().toString(), "Spring AI rocks!!",
@@ -141,7 +144,7 @@ class MongoDBAtlasVectorStoreIT {
 
 	@Test
 	void searchWithFilters() {
-		contextRunner.run(context -> {
+		this.contextRunner.run(context -> {
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 
 			var bgDocument = new Document("The World is Big and Salvation Lurks Around the Corner",
@@ -225,6 +228,7 @@ class MongoDBAtlasVectorStoreIT {
 		@Bean
 		public Converter<MimeType, String> mimeTypeToStringConverter() {
 			return new Converter<MimeType, String>() {
+
 				@Override
 				public String convert(MimeType source) {
 					return source.toString();
@@ -235,6 +239,7 @@ class MongoDBAtlasVectorStoreIT {
 		@Bean
 		public Converter<String, MimeType> stringToMimeTypeConverter() {
 			return new Converter<String, MimeType>() {
+
 				@Override
 				public MimeType convert(String source) {
 					return MimeType.valueOf(source);

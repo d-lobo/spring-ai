@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,12 +28,18 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
+
 import org.springframework.ai.chat.client.advisor.DefaultAroundAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.AdvisedRequest;
 import org.springframework.ai.chat.client.advisor.api.AdvisedResponse;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
-import org.springframework.ai.chat.client.advisor.api.CallAroundAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.CallAroundAdvisor;
+import org.springframework.ai.chat.client.advisor.api.CallAroundAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAroundAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAroundAdvisorChain;
 import org.springframework.ai.chat.client.observation.ChatClientObservationContext;
@@ -46,6 +52,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.StreamingChatModel;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
@@ -61,12 +68,6 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.MimeType;
 import org.springframework.util.StringUtils;
 
-import io.micrometer.observation.Observation;
-import io.micrometer.observation.ObservationRegistry;
-import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor;
-import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Schedulers;
-
 /**
  * The default implementation of {@link ChatClient} as created by the
  * {@link Builder#build()} } method.
@@ -77,6 +78,7 @@ import reactor.core.scheduler.Schedulers;
  * @author Arjen Poutsma
  * @author Soby Chacko
  * @author Dariusz Jedrzejczyk
+ * @author Thomas Vitale
  * @since 1.0.0
  */
 public class DefaultChatClient implements ChatClient {
@@ -87,6 +89,30 @@ public class DefaultChatClient implements ChatClient {
 
 	public DefaultChatClient(DefaultChatClientRequestSpec defaultChatClientRequest) {
 		this.defaultChatClientRequest = defaultChatClientRequest;
+	}
+
+	private static AdvisedRequest toAdvisedRequest(DefaultChatClientRequestSpec inputRequest, String formatParam) {
+		Map<String, Object> advisorContext = new ConcurrentHashMap<>(inputRequest.getAdvisorParams());
+		if (StringUtils.hasText(formatParam)) {
+			advisorContext.put("formatParam", formatParam);
+		}
+
+		return new AdvisedRequest(inputRequest.chatModel, inputRequest.userText, inputRequest.systemText,
+				inputRequest.chatOptions, inputRequest.media, inputRequest.functionNames,
+				inputRequest.functionCallbacks, inputRequest.messages, inputRequest.userParams,
+				inputRequest.systemParams, inputRequest.advisors, inputRequest.advisorParams, advisorContext,
+				inputRequest.toolContext);
+	}
+
+	public static DefaultChatClientRequestSpec toDefaultChatClientRequestSpec(AdvisedRequest advisedRequest,
+			ObservationRegistry observationRegistry, ChatClientObservationConvention customObservationConvention) {
+
+		return new DefaultChatClientRequestSpec(advisedRequest.chatModel(), advisedRequest.userText(),
+				advisedRequest.userParams(), advisedRequest.systemText(), advisedRequest.systemParams(),
+				advisedRequest.functionCallbacks(), advisedRequest.messages(), advisedRequest.functionNames(),
+				advisedRequest.media(), advisedRequest.chatOptions(), advisedRequest.advisors(),
+				advisedRequest.advisorParams(), observationRegistry, customObservationConvention,
+				advisedRequest.toolContext());
 	}
 
 	@Override
@@ -143,11 +169,11 @@ public class DefaultChatClient implements ChatClient {
 
 	public static class DefaultPromptUserSpec implements PromptUserSpec {
 
-		private String text = "";
-
 		private final Map<String, Object> params = new HashMap<>();
 
 		private final List<Media> media = new ArrayList<>();
+
+		private String text = "";
 
 		@Override
 		public PromptUserSpec media(Media... media) {
@@ -218,9 +244,9 @@ public class DefaultChatClient implements ChatClient {
 
 	public static class DefaultPromptSystemSpec implements PromptSystemSpec {
 
-		private String text = "";
-
 		private final Map<String, Object> params = new HashMap<>();
+
+		private String text = "";
 
 		@Override
 		public PromptSystemSpec text(String text) {
@@ -294,11 +320,11 @@ public class DefaultChatClient implements ChatClient {
 		}
 
 		public List<Advisor> getAdvisors() {
-			return advisors;
+			return this.advisors;
 		}
 
 		public Map<String, Object> getParams() {
-			return params;
+			return this.params;
 		}
 
 	}
@@ -360,8 +386,11 @@ public class DefaultChatClient implements ChatClient {
 		private ChatResponse doGetObservableChatResponse(DefaultChatClientRequestSpec inputRequest,
 				String formatParam) {
 
-			ChatClientObservationContext observationContext = new ChatClientObservationContext(inputRequest,
-					formatParam, false);
+			ChatClientObservationContext observationContext = ChatClientObservationContext.builder()
+				.withRequest(inputRequest)
+				.withFormat(formatParam)
+				.withStream(false)
+				.build();
 
 			var observation = ChatClientObservationDocumentation.AI_CHAT_CLIENT.observation(
 					inputRequest.getCustomObservationConvention(), DEFAULT_CHAT_CLIENT_OBSERVATION_CONVENTION,
@@ -407,8 +436,10 @@ public class DefaultChatClient implements ChatClient {
 		private Flux<ChatResponse> doGetObservableFluxChatResponse(DefaultChatClientRequestSpec inputRequest) {
 			return Flux.deferContextual(contextView -> {
 
-				ChatClientObservationContext observationContext = new ChatClientObservationContext(inputRequest, "",
-						true);
+				ChatClientObservationContext observationContext = ChatClientObservationContext.builder()
+					.withRequest(inputRequest)
+					.withStream(true)
+					.build();
 
 				Observation observation = ChatClientObservationDocumentation.AI_CHAT_CLIENT.observation(
 						inputRequest.getCustomObservationConvention(), DEFAULT_CHAT_CLIENT_OBSERVATION_CONVENTION,
@@ -419,12 +450,12 @@ public class DefaultChatClient implements ChatClient {
 
 				var initialAdvisedRequest = toAdvisedRequest(inputRequest, "");
 
-				// @formatter:off				
+				// @formatter:off
 				// Apply the around advisor chain that terminates with the, last,
 				// model call advisor.
-				 Flux<AdvisedResponse> stream = inputRequest.aroundAdvisorChainBuilder.build().nextAroundStream(initialAdvisedRequest);
+				Flux<AdvisedResponse> stream = inputRequest.aroundAdvisorChainBuilder.build().nextAroundStream(initialAdvisedRequest);
 
-				 return stream
+				return stream
 					.map(AdvisedResponse::response)
 					.doOnError(observation::error)
 					.doFinally(s -> observation.stop())
@@ -457,12 +488,6 @@ public class DefaultChatClient implements ChatClient {
 
 		private final ChatModel chatModel;
 
-		private String userText = "";
-
-		private String systemText = "";
-
-		private ChatOptions chatOptions;
-
 		private final List<Media> media = new ArrayList<>();
 
 		private final List<String> functionNames = new ArrayList<>();
@@ -480,6 +505,92 @@ public class DefaultChatClient implements ChatClient {
 		private final Map<String, Object> advisorParams = new HashMap<>();
 
 		private final DefaultAroundAdvisorChain.Builder aroundAdvisorChainBuilder;
+
+		private final Map<String, Object> toolContext = new HashMap<>();
+
+		private String userText = "";
+
+		private String systemText = "";
+
+		private ChatOptions chatOptions;
+
+		/* copy constructor */
+		DefaultChatClientRequestSpec(DefaultChatClientRequestSpec ccr) {
+			this(ccr.chatModel, ccr.userText, ccr.userParams, ccr.systemText, ccr.systemParams, ccr.functionCallbacks,
+					ccr.messages, ccr.functionNames, ccr.media, ccr.chatOptions, ccr.advisors, ccr.advisorParams,
+					ccr.observationRegistry, ccr.customObservationConvention, ccr.toolContext);
+		}
+
+		public DefaultChatClientRequestSpec(ChatModel chatModel, String userText, Map<String, Object> userParams,
+				String systemText, Map<String, Object> systemParams, List<FunctionCallback> functionCallbacks,
+				List<Message> messages, List<String> functionNames, List<Media> media, ChatOptions chatOptions,
+				List<Advisor> advisors, Map<String, Object> advisorParams, ObservationRegistry observationRegistry,
+				ChatClientObservationConvention customObservationConvention, Map<String, Object> toolContext) {
+
+			this.chatModel = chatModel;
+			this.chatOptions = chatOptions != null ? chatOptions.copy()
+					: (chatModel.getDefaultOptions() != null) ? chatModel.getDefaultOptions().copy() : null;
+
+			this.userText = userText;
+			this.userParams.putAll(userParams);
+			this.systemText = systemText;
+			this.systemParams.putAll(systemParams);
+
+			this.functionNames.addAll(functionNames);
+			this.functionCallbacks.addAll(functionCallbacks);
+			this.messages.addAll(messages);
+			this.media.addAll(media);
+			this.advisors.addAll(advisors);
+			this.advisorParams.putAll(advisorParams);
+			this.observationRegistry = observationRegistry;
+			this.customObservationConvention = customObservationConvention;
+			this.toolContext.putAll(toolContext);
+
+			// @formatter:off
+			// At the stack bottom add the non-streaming and streaming model call advisors.
+			// They play the role of the last advisor in the around advisor chain.
+			this.advisors.add(new CallAroundAdvisor() {
+
+				@Override
+				public String getName() {
+					return CallAroundAdvisor.class.getSimpleName();
+				}
+
+				@Override
+				public int getOrder() {
+					return Ordered.LOWEST_PRECEDENCE;
+				}
+
+				@Override
+				public AdvisedResponse aroundCall(AdvisedRequest advisedRequest, CallAroundAdvisorChain chain) {
+					return new AdvisedResponse(chatModel.call(advisedRequest.toPrompt()), Collections.unmodifiableMap(advisedRequest.adviseContext()));
+				}
+			});
+
+			this.advisors.add(new StreamAroundAdvisor() {
+
+				@Override
+				public String getName() {
+					return StreamAroundAdvisor.class.getSimpleName();
+				}
+
+				@Override
+				public int getOrder() {
+					return Ordered.LOWEST_PRECEDENCE;
+				}
+
+				@Override
+				public Flux<AdvisedResponse> aroundStream(AdvisedRequest advisedRequest, StreamAroundAdvisorChain chain) {
+					return chatModel.stream(advisedRequest.toPrompt())
+					.map(chatResponse -> new AdvisedResponse(chatResponse, Collections.unmodifiableMap(advisedRequest.adviseContext())))
+					.publishOn(Schedulers.boundedElastic()); // TODO add option to disable.
+				}
+			});
+			// @formatter:on
+
+			this.aroundAdvisorChainBuilder = DefaultAroundAdvisorChain.builder(observationRegistry)
+				.pushAll(this.advisors);
+		}
 
 		private ObservationRegistry getObservationRegistry() {
 			return this.observationRegistry;
@@ -533,81 +644,8 @@ public class DefaultChatClient implements ChatClient {
 			return this.functionCallbacks;
 		}
 
-		/* copy constructor */
-		DefaultChatClientRequestSpec(DefaultChatClientRequestSpec ccr) {
-			this(ccr.chatModel, ccr.userText, ccr.userParams, ccr.systemText, ccr.systemParams, ccr.functionCallbacks,
-					ccr.messages, ccr.functionNames, ccr.media, ccr.chatOptions, ccr.advisors, ccr.advisorParams,
-					ccr.observationRegistry, ccr.customObservationConvention);
-		}
-
-		public DefaultChatClientRequestSpec(ChatModel chatModel, String userText, Map<String, Object> userParams,
-				String systemText, Map<String, Object> systemParams, List<FunctionCallback> functionCallbacks,
-				List<Message> messages, List<String> functionNames, List<Media> media, ChatOptions chatOptions,
-				List<Advisor> advisors, Map<String, Object> advisorParams, ObservationRegistry observationRegistry,
-				ChatClientObservationConvention customObservationConvention) {
-
-			this.chatModel = chatModel;
-			this.chatOptions = chatOptions != null ? chatOptions.copy()
-					: (chatModel.getDefaultOptions() != null) ? chatModel.getDefaultOptions().copy() : null;
-
-			this.userText = userText;
-			this.userParams.putAll(userParams);
-			this.systemText = systemText;
-			this.systemParams.putAll(systemParams);
-
-			this.functionNames.addAll(functionNames);
-			this.functionCallbacks.addAll(functionCallbacks);
-			this.messages.addAll(messages);
-			this.media.addAll(media);
-			this.advisors.addAll(advisors);
-			this.advisorParams.putAll(advisorParams);
-			this.observationRegistry = observationRegistry;
-			this.customObservationConvention = customObservationConvention;
-
-			// @formatter:off		
-			// At the stack bottom add the non-streaming and streaming model call advisors.
-			// They play the role of the last advisor in the around advisor chain.				
-			this.advisors.add(new CallAroundAdvisor() {
-
-				@Override
-				public String getName() {						
-					return CallAroundAdvisor.class.getSimpleName();
-				}
-
-				@Override
-				public int getOrder() {
-					return Ordered.LOWEST_PRECEDENCE;
-				}
-
-				@Override					
-				public AdvisedResponse aroundCall(AdvisedRequest advisedRequest, CallAroundAdvisorChain chain) {
-					return new AdvisedResponse(chatModel.call(advisedRequest.toPrompt()), Collections.unmodifiableMap(advisedRequest.adviseContext()));
-				}
-			});
-
-			this.advisors.add(new StreamAroundAdvisor() {
-
-				@Override
-				public String getName() {
-					return StreamAroundAdvisor.class.getSimpleName();
-				}
-
-				@Override
-				public int getOrder() {
-					return Ordered.LOWEST_PRECEDENCE;
-				}
-
-				@Override
-				public Flux<AdvisedResponse> aroundStream(AdvisedRequest advisedRequest, StreamAroundAdvisorChain chain) {
-					return chatModel.stream(advisedRequest.toPrompt())
-					.map( chatResponse -> new AdvisedResponse(chatResponse, Collections.unmodifiableMap(advisedRequest.adviseContext())))
-					.publishOn(Schedulers.boundedElastic());// TODO add option to disable.
-				}
-			});
-			// @formatter:on
-
-			this.aroundAdvisorChainBuilder = DefaultAroundAdvisorChain.builder(observationRegistry)
-				.pushAll(this.advisors);
+		public Map<String, Object> getToolContext() {
+			return this.toolContext;
 		}
 
 		/**
@@ -616,7 +654,7 @@ public class DefaultChatClient implements ChatClient {
 		 */
 		public Builder mutate() {
 			DefaultChatClientBuilder builder = (DefaultChatClientBuilder) ChatClient
-				.builder(chatModel, this.observationRegistry, this.customObservationConvention)
+				.builder(this.chatModel, this.observationRegistry, this.customObservationConvention)
 				.defaultSystem(s -> s.text(this.systemText).params(this.systemParams))
 				.defaultUser(u -> u.text(this.userText)
 					.params(this.userParams)
@@ -627,6 +665,7 @@ public class DefaultChatClient implements ChatClient {
 			// workaround to set the missing fields.
 			builder.defaultRequest.getMessages().addAll(this.messages);
 			builder.defaultRequest.getFunctionCallbacks().addAll(this.functionCallbacks);
+			builder.defaultRequest.getToolContext().putAll(this.toolContext);
 
 			return builder;
 		}
@@ -678,6 +717,22 @@ public class DefaultChatClient implements ChatClient {
 			return this.function(name, description, null, function);
 		}
 
+		public <I, O> ChatClientRequestSpec function(String name, String description,
+				java.util.function.BiFunction<I, ToolContext, O> biFunction) {
+
+			Assert.hasText(name, "the name must be non-null and non-empty");
+			Assert.hasText(description, "the description must be non-null and non-empty");
+			Assert.notNull(biFunction, "the biFunction must be non-null");
+
+			FunctionCallbackWrapper<I, O> fcw = FunctionCallbackWrapper.builder(biFunction)
+				.withDescription(description)
+				.withName(name)
+				.withResponseConverter(Object::toString)
+				.build();
+			this.functionCallbacks.add(fcw);
+			return this;
+		}
+
 		public <I, O> ChatClientRequestSpec function(String name, String description, Class<I> inputType,
 				java.util.function.Function<I, O> function) {
 
@@ -698,6 +753,18 @@ public class DefaultChatClient implements ChatClient {
 		public ChatClientRequestSpec functions(String... functionBeanNames) {
 			Assert.notNull(functionBeanNames, "the functionBeanNames must be non-null");
 			this.functionNames.addAll(List.of(functionBeanNames));
+			return this;
+		}
+
+		public ChatClientRequestSpec functions(FunctionCallback... functionCallbacks) {
+			Assert.notNull(functionCallbacks, "the functionCallbacks must be non-null");
+			this.functionCallbacks.addAll(Arrays.asList(functionCallbacks));
+			return this;
+		}
+
+		public ChatClientRequestSpec toolContext(Map<String, Object> toolContext) {
+			Assert.notNull(toolContext, "the toolContext must be non-null");
+			this.toolContext.putAll(toolContext);
 			return this;
 		}
 
@@ -784,28 +851,6 @@ public class DefaultChatClient implements ChatClient {
 
 	}
 
-	private static AdvisedRequest toAdvisedRequest(DefaultChatClientRequestSpec inputRequest, String formatParam) {
-		Map<String, Object> advisorContext = new ConcurrentHashMap<>(inputRequest.getAdvisorParams());
-		if (StringUtils.hasText(formatParam)) {
-			advisorContext.put("formatParam", formatParam);
-		}
-
-		return new AdvisedRequest(inputRequest.chatModel, inputRequest.userText, inputRequest.systemText,
-				inputRequest.chatOptions, inputRequest.media, inputRequest.functionNames,
-				inputRequest.functionCallbacks, inputRequest.messages, inputRequest.userParams,
-				inputRequest.systemParams, inputRequest.advisors, inputRequest.advisorParams, advisorContext);
-	}
-
-	public static DefaultChatClientRequestSpec toDefaultChatClientRequestSpec(AdvisedRequest advisedRequest,
-			ObservationRegistry observationRegistry, ChatClientObservationConvention customObservationConvention) {
-
-		return new DefaultChatClientRequestSpec(advisedRequest.chatModel(), advisedRequest.userText(),
-				advisedRequest.userParams(), advisedRequest.systemText(), advisedRequest.systemParams(),
-				advisedRequest.functionCallbacks(), advisedRequest.messages(), advisedRequest.functionNames(),
-				advisedRequest.media(), advisedRequest.chatOptions(), advisedRequest.advisors(),
-				advisedRequest.advisorParams(), observationRegistry, customObservationConvention);
-	}
-
 	// Prompt
 
 	public static class DefaultCallPromptResponseSpec implements CallPromptResponseSpec {
@@ -832,7 +877,7 @@ public class DefaultChatClient implements ChatClient {
 		}
 
 		private ChatResponse doGetChatResponse(Prompt prompt) {
-			return chatModel.call(prompt);
+			return this.chatModel.call(prompt);
 		}
 
 	}

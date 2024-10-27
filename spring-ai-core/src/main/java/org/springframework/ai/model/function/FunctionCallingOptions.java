@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,15 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.model.function;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+
+import org.springframework.ai.chat.prompt.ChatOptions;
 
 /**
  * @author Christian Tzolov
  */
-public interface FunctionCallingOptions {
+public interface FunctionCallingOptions extends ChatOptions {
+
+	/**
+	 * @return Returns FunctionCallingOptionsBuilder to create a new instance of
+	 * FunctionCallingOptions.
+	 */
+	static FunctionCallingOptionsBuilder builder() {
+		return new FunctionCallingOptionsBuilder();
+	}
 
 	/**
 	 * Function Callbacks to be registered with the ChatModel. For Prompt Options the
@@ -64,12 +76,8 @@ public interface FunctionCallingOptions {
 		}
 	}
 
-	/**
-	 * @return Returns FunctionCallingOptionsBuilder to create a new instance of
-	 * FunctionCallingOptions.
-	 */
-	public static FunctionCallingOptionsBuilder builder() {
-		return new FunctionCallingOptionsBuilder();
-	}
+	Map<String, Object> getToolContext();
+
+	void setToolContext(Map<String, Object> tooContext);
 
 }
